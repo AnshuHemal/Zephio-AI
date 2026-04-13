@@ -3,6 +3,7 @@
 import { createInsForgeServerClient, setAuthCookies, clearAuthCookies } from '@/lib/insforge-server'
 import { validateEmail } from '@/lib/email-validator'
 import { redirect } from 'next/navigation'
+import { sendWelcomeEmail } from '@/lib/email'
 
 export async function signInAction(formData: FormData) {
   const email = String(formData.get('email') ?? '').trim()
@@ -83,6 +84,12 @@ export async function signUpAction(formData: FormData) {
         : Promise.resolve(),
     ])
 
+    // Send welcome email (non-blocking)
+    sendWelcomeEmail({
+      to: email,
+      firstName: fullName.split(' ')[0] || fullName,
+    }).catch(() => {})
+
     return { success: true }
   }
 
@@ -115,6 +122,14 @@ export async function verifyEmailAction(formData: FormData) {
         .from('profiles')
         .upsert({ userId: data.user.id, fullName, email }, { onConflict: 'userId' }),
     ])
+  }
+
+  // Send welcome email after OTP verification (non-blocking)
+  if (email) {
+    sendWelcomeEmail({
+      to: email,
+      firstName: (fullName || email).split(' ')[0],
+    }).catch(() => {})
   }
 
   return { success: true }

@@ -22,6 +22,8 @@ import {
   isLimitReached,
   remainingGenerations,
 } from "@/lib/credits";
+import { sendUpgradeReminderEmail } from "@/lib/email";
+import { captureGenerationError } from "@/lib/sentry";
 
 class AbortError extends Error {
   constructor() {
@@ -541,6 +543,41 @@ export async function POST(request: NextRequest) {
         { status: 401 },
       );
 
+    // ── Per-user generation rate limit (5 per minute) ────────────────────
+    const { rateLimit: checkRate, generationLimiter, getClientIp, rateLimitResponse } = await import("@/lib/rate-limit");
+    const userRateResult = checkRate(user.id, generationLimiter);
+    if (!userRateResult.success) {
+      return NextResponse.json(
+        {
+          error: "rate_limited",
+          message: `Too many generations. Please wait ${userRateResult.retryAfter} seconds before trying again.`,
+          retryAfter: userRateResult.retryAfter,
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": String(userRateResult.retryAfter) },
+        }
+      );
+    }
+
+    // Also apply IP-level check for extra protection
+    const ip = getClientIp(request);
+    const ipRateResult = checkRate(ip, { id: "gen-ip", limit: 10, windowMs: 60 * 1000 });
+    if (!ipRateResult.success) {
+      return NextResponse.json(
+        {
+          error: "rate_limited",
+          message: `Too many requests from this IP. Please wait ${ipRateResult.retryAfter} seconds.`,
+          retryAfter: ipRateResult.retryAfter,
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": String(ipRateResult.retryAfter) },
+        }
+      );
+    }
+    // ────────────────────────────────────────────────────────────────────
+
     // ── Credits check ────────────────────────────────────────────────────
     const credits = await getOrCreateCredits(insforge, user.id);
     if (isLimitReached(credits)) {
@@ -849,6 +886,27 @@ export async function POST(request: NextRequest) {
                 limit: 10,
                 plan: updatedCredits.plan,
               }, { transient: true });
+
+              // Send upgrade reminder when user hits 7/10 (3 remaining) — once per threshold
+              const remaining = remainingGenerations(updatedCredits);
+              if (remaining === 3 && updatedCredits.plan === "free") {
+                const { data: userProfile } = await insforge.database
+                  .from("profiles")
+                  .select("fullName, email")
+                  .eq("userId", user.id)
+                  .single();
+
+                const userEmail = (user as any).email ?? userProfile?.email;
+                if (userEmail) {
+                  sendUpgradeReminderEmail({
+                    to: userEmail,
+                    firstName: userProfile?.fullName?.split(" ")[0] || "there",
+                    used: updatedCredits.used,
+                    limit: 10,
+                    remaining,
+                  }).catch(() => {});
+                }
+              }
             }
           }
         } catch (error) {
@@ -868,8 +926,14 @@ export async function POST(request: NextRequest) {
             return;
           }
 
-          emit(writer, "generation", { status: "error" }, { id: "gen-card" });
+          // Report to Sentry with full context
+          captureGenerationError(error, {
+            userId: user.id,
+            slugId,
+            intent: "unknown",
+          });
 
+          emit(writer, "generation", { status: "error" }, { id: "gen-card" });
           writer.write({ type: "error", errorText: "Something went wrong" });
         }
       },

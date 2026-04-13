@@ -60,3 +60,5 @@ next-env.d.ts
 # ok now design a Zephio main page that will take the prompt from the user,
 
 # so add the text area and some suggestions and all just like the Claude, Gemini and other AI tools have the main page..
+# Sentry Config File
+.env.sentry-build-plugin
