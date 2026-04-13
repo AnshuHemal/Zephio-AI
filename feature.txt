@@ -1,0 +1,100 @@
+What's already solid
+You've built a lot. Core AI pipeline, streaming canvas, chat interface, auth, credits/limits, rate limiting, Sentry, email notifications, dashboard, onboarding, SEO, undo/redo, page/project rename, feedback, style presets, export, share preview, dark mode. That's a real product.
+
+What's still missing — in priority order
+1. Stripe Payments (Critical — do this first)
+
+You have a credits system, an upgrade modal, and a pricing page — but zero way to actually pay. The upgrade button currently links to /#pricing which goes nowhere useful. Without this, you literally cannot make money.
+
+You need:
+
+stripe.ts
+ — Stripe client singleton
+POST /api/stripe/checkout — creates a Checkout session, redirects to Stripe
+POST /api/stripe/webhook — handles checkout.session.completed, subscription.updated, subscription.deleted — updates user_credits.plan in the DB
+POST /api/stripe/portal — opens the Stripe Customer Portal for cancellation/billing management
+upgrade-button.tsx
+ — a real button that hits /api/stripe/checkout
+Wire the upgrade modal and pricing section to use the real button
+Add a "Manage billing" link in the dashboard header for Pro users
+Add STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_PRO_MONTHLY, STRIPE_PRICE_TEAM_MONTHLY to .env
+The user_credits table also needs a stripeCustomerId column so you can link users to Stripe customers.
+
+2. Terms of Service & Privacy Policy
+
+Stripe requires these before you can go live. So does the law in most jurisdictions if you're collecting emails and payments. Use Termly or Iubenda — both generate compliant docs in under 10 minutes. Then:
+
+Add /terms and /privacy pages
+Update the footer links (currently # placeholders) to point to them
+Link them in the sign-up form ("By signing up you agree to our Terms and Privacy Policy")
+3. Product Analytics
+
+You have Sentry for errors but no visibility into user behavior. You're flying blind on:
+
+Which prompts users actually type
+Where they drop off (generate but never export?)
+Conversion rate from free → paid
+Which templates get used most
+PostHog is the best fit — open source, generous free tier, works perfectly with Next.js App Router. Add it to 
+layout.tsx
+ and track these events:
+
+generation_started / generation_completed
+export_downloaded
+share_link_copied
+upgrade_modal_opened / upgrade_clicked
+template_selected
+Without this data, you're guessing at what to improve.
+
+4. "Built with Zephio" Watermark on Free Exports
+
+Every free export should include a small, tasteful badge in the footer of generated pages — something like "Made with Zephio". Pro users get clean exports. This does two things:
+
+Creates a viral loop — every shared page is a Zephio ad
+Gives free users a real, tangible reason to upgrade
+This is a growth mechanic that costs you nothing to implement and compounds over time.
+
+5. Generation History / Version Control
+
+Right now if a user regenerates a page, the old version is gone forever. This is a trust killer — users won't experiment freely if they know they can't go back. The fix is simple: store the last 3 versions of each page's HTML in the DB and let users restore them. A small "history" icon on each page in the sidebar that opens a version picker is all you need.
+
+6. Canvas Performance with Many Pages
+
+Every page renders a live iframe even when off-screen. With 5+ pages this gets heavy — slow scroll, high memory, janky interactions. The fix is iframe virtualization: only render the iframe content when the page is within the visible viewport. This is a significant UX improvement for power users building multi-page sites.
+
+7. Mobile-Responsive Dashboard
+
+The canvas doesn't need to work on mobile, but the dashboard is the home screen users return to every session. The project card grid, search bar, and view toggle need to be tested and polished on small screens. Right now it likely breaks at 375px.
+
+8. Keyboard Shortcuts
+
+Power users expect them. You already have Cmd+Z/Redo. Add:
+
+Cmd+Enter to submit the prompt
+Escape to close modals / deselect page
+Cmd+K for a command palette (search projects, create new, etc.)
+The command palette (cmdk) is already in your package.json — it's just not wired up.
+
+9. "Copy Link" Button on the Preview Page
+
+The preview page exists but there's no obvious way to share it further. Someone receives a preview link, opens it, loves it — and has no easy way to forward it. Add a prominent "Copy link" button in the preview header. One line of code, high impact.
+
+10. Empty Canvas State
+
+When a user starts a new project and hasn't generated anything yet, the canvas is a blank grid with no guidance. Add a centered prompt: "Describe your vision in the chat →" with a subtle arrow pointing to the input. Reduces confusion for new users, improves time-to-first-generation.
+
+11. Project Thumbnail Screenshots
+
+The dashboard currently renders a live scaled-down iframe as the thumbnail. This is slow, causes layout issues, and is heavy on memory when you have 20+ projects. The better approach: generate a static PNG screenshot when a project is saved and store it. Even a CSS-based placeholder showing the color scheme would be better than a live iframe.
+
+12. Webhook Security Reminder
+
+When you implement Stripe, always verify the webhook signature using stripe.webhooks.constructEvent() before processing any event. Never trust a raw POST to your webhook endpoint — anyone can fake a payment without signature verification.
+
+Priority order
+Week 1:  Stripe payments + ToS/Privacy pages
+Week 2:  Analytics (PostHog) + Watermark on free exports
+Week 3:  Generation history + Canvas performance
+Week 4:  Mobile dashboard + Keyboard shortcuts (cmdk)
+Week 5:  Thumbnail screenshots + Empty canvas state + Copy link on preview
+The single most important thing right now is Stripe. Everything else is polish — Stripe is survival. Want me to implement it?
