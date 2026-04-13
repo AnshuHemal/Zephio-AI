@@ -39,3 +39,24 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# InsForge & AI agent skills
+.insforge
+.agent
+.agents
+.augment
+.claude
+.cline
+.github/copilot*
+.kilocode
+.qoder
+.qwen
+.roo
+.trae
+.windsurf
+.kiro
+.junie
+
+# ok now design a Zephio main page that will take the prompt from the user,
+
+# so add the text area and some suggestions and all just like the Claude, Gemini and other AI tools have the main page..

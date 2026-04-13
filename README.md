@@ -34,3 +34,36 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+npx @insforge/cli db import scratch.sql;
+
+insforge database query:
+CREATE TABLE projects (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  title TEXT NOT NULL,
+  "slugId" TEXT NOT NULL UNIQUE,
+  "userId" UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  "createdAt" TIMESTAMPTZ DEFAULT now(),
+  "updatedAt" TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TYPE "Role" AS ENUM ('assistant', 'system', 'user');
+
+CREATE TABLE messages (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  role "Role" NOT NULL,
+  parts JSONB NOT NULL,
+  "projectId" UUID REFERENCES projects(id) ON DELETE CASCADE,
+  "createdAt" TIMESTAMPTZ DEFAULT now(),
+  "updatedAt" TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE pages (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  "rootStyles" TEXT NOT NULL,
+  "htmlContent" TEXT NOT NULL,
+  "projectId" UUID REFERENCES projects(id) ON DELETE CASCADE,
+  "createdAt" TIMESTAMPTZ DEFAULT now(),
+  "updatedAt" TIMESTAMPTZ DEFAULT now()
+);
