@@ -32,6 +32,7 @@ import { useAnalytics } from "@/lib/analytics";
 import { useKeyboardShortcutsContext } from "@/components/keyboard-shortcuts-provider";
 import { getShortcutDisplay } from "@/hooks/use-keyboard-shortcuts";
 import EmptyCanvas from "./empty-canvas";
+import { completeStep } from "@/lib/onboarding-checklist";
 
 type PropsType = {
   pages: PageType[];
@@ -144,6 +145,7 @@ const Canvas = ({
       page_count: pages.length,
       format: pages.length === 1 ? "single_html" : "zip",
     });
+    completeStep("export_design");
     setIsDownloading(false);
   };
 
@@ -155,6 +157,7 @@ const Canvas = ({
       slug_id: slugId,
       page_count: pages.length,
     });
+    completeStep("share_preview");
   };
 
   const visiblePages = pages.filter((p) => !p.isLoading || p.htmlContent);

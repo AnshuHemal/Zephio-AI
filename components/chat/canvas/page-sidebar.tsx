@@ -4,14 +4,16 @@ import React, { useRef, useState, useEffect } from "react";
 import { motion, AnimatePresence, Reorder } from "motion/react";
 import { PageType } from "@/types/project";
 import { cn } from "@/lib/utils";
-import { GripVertical, Trash2, Download, Pencil, Check, X, History, Copy, Plus, Wand2, FileText } from "lucide-react";
+import { GripVertical, Trash2, Download, Pencil, Check, X, History, Copy, Plus, Wand2, FileText, Code2, Braces } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { downloadPage } from "@/lib/export";
 import { Skeleton } from "@/components/ui/skeleton";
 import { renamePageAction, duplicatePageAction, addBlankPageAction } from "@/app/action/action";
+import { getHTMLWrapper } from "@/lib/page-wrapper";
 import { toast } from "sonner";
 import PageVersionDrawer from "./page-version-drawer";
+import PagePreviewTooltip from "./page-preview-tooltip";
 import {
   Tooltip,
   TooltipContent,
@@ -62,6 +64,28 @@ export default function PageSidebar({
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [addingBlank, setAddingBlank] = useState(false);
   const [addPopoverOpen, setAddPopoverOpen] = useState(false);
+  const [copiedHtmlId, setCopiedHtmlId] = useState<string | null>(null);
+  const [copiedCssId, setCopiedCssId] = useState<string | null>(null);
+
+  const handleCopyHtml = (e: React.MouseEvent, page: PageType) => {
+    e.stopPropagation();
+    const html = getHTMLWrapper(page.htmlContent, page.name, page.rootStyles, page.id);
+    navigator.clipboard.writeText(html);
+    setCopiedHtmlId(page.id);
+    toast.success("HTML copied!");
+    setTimeout(() => setCopiedHtmlId(null), 2000);
+  };
+
+  const handleCopyCss = (e: React.MouseEvent, page: PageType) => {
+    e.stopPropagation();
+    if (!page.rootStyles?.trim()) { toast.error("No CSS variables found."); return; }
+    const cssBlock = `:root {\n${page.rootStyles
+      .split(";").map((l) => l.trim()).filter(Boolean).map((l) => `  ${l};`).join("\n")}\n}`;
+    navigator.clipboard.writeText(cssBlock);
+    setCopiedCssId(page.id);
+    toast.success("CSS variables copied!");
+    setTimeout(() => setCopiedCssId(null), 2000);
+  };
 
   const historyPage = pages.find((p) => p.id === historyPageId) ?? null;
 
@@ -163,20 +187,27 @@ export default function PageSidebar({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15 } }}
                 transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                className={cn(
-                  "group relative flex items-center gap-2 rounded-lg border px-2 py-2.5 select-none transition-all duration-150",
-                  isRenaming
-                    ? "border-primary/50 bg-primary/5 shadow-sm cursor-default"
-                    : isSelected
-                    ? "border-primary/40 bg-primary/5 shadow-sm cursor-pointer"
-                    : "border-transparent hover:border-border hover:bg-accent/50 cursor-pointer",
-                  isDragging && "shadow-lg scale-[1.02] z-50 border-border bg-card"
-                )}
-                onClick={() => {
-                  if (isRenaming) return;
-                  if (!page.isLoading) onSelectPage(page.id);
-                }}
               >
+                <PagePreviewTooltip
+                  name={page.name}
+                  rootStyles={page.rootStyles}
+                  isLoading={page.isLoading}
+                >
+                  <div
+                    className={cn(
+                      "group relative flex items-center gap-2 rounded-lg border px-2 py-2.5 select-none transition-all duration-150",
+                      isRenaming
+                        ? "border-primary/50 bg-primary/5 shadow-sm cursor-default"
+                        : isSelected
+                        ? "border-primary/40 bg-primary/5 shadow-sm cursor-pointer"
+                        : "border-transparent hover:border-border hover:bg-accent/50 cursor-pointer",
+                      isDragging && "shadow-lg scale-[1.02] z-50 border-border bg-card"
+                    )}
+                    onClick={() => {
+                      if (isRenaming) return;
+                      if (!page.isLoading) onSelectPage(page.id);
+                    }}
+                  >
                 {/* Drag handle — hidden while renaming */}
                 <div className={cn(
                   "shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground transition-colors",
@@ -314,6 +345,56 @@ export default function PageSidebar({
                         <Button
                           size="icon"
                           variant="ghost"
+                          className="size-6 shrink-0 text-muted-foreground hover:text-foreground"
+                          onClick={(e) => handleCopyCss(e, page)}
+                          disabled={page.isLoading}
+                        >
+                          <AnimatePresence mode="wait" initial={false}>
+                            {copiedCssId === page.id ? (
+                              <motion.span key="check" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }}>
+                                <Check className="size-3 text-green-500" />
+                              </motion.span>
+                            ) : (
+                              <motion.span key="icon" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }}>
+                                <Braces className="size-3" />
+                              </motion.span>
+                            )}
+                          </AnimatePresence>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">Copy CSS variables</TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="size-6 shrink-0 text-muted-foreground hover:text-foreground"
+                          onClick={(e) => handleCopyHtml(e, page)}
+                          disabled={page.isLoading}
+                        >
+                          <AnimatePresence mode="wait" initial={false}>
+                            {copiedHtmlId === page.id ? (
+                              <motion.span key="check" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }}>
+                                <Check className="size-3 text-green-500" />
+                              </motion.span>
+                            ) : (
+                              <motion.span key="icon" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ duration: 0.15 }}>
+                                <Code2 className="size-3" />
+                              </motion.span>
+                            )}
+                          </AnimatePresence>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">Copy HTML</TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="icon"
+                          variant="ghost"
                           className="size-6 shrink-0 hover:text-destructive"
                           onClick={(e) => {
                             e.stopPropagation();
@@ -328,6 +409,8 @@ export default function PageSidebar({
                     </Tooltip>
                   </div>
                 )}
+                  </div>
+                </PagePreviewTooltip>
               </Reorder.Item>
             );
           })}

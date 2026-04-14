@@ -22,6 +22,7 @@ import { useAnalytics } from "@/lib/analytics";
 import KeyboardShortcutsProvider from "@/components/keyboard-shortcuts-provider";
 import { setLastOpened } from "@/lib/last-opened";
 import { addToPromptHistory } from "@/lib/prompt-history";
+import { completeStep } from "@/lib/onboarding-checklist";
 
 type PropsType = {
   isProjectPage?: boolean;
@@ -44,6 +45,11 @@ const ChatInterface = ({
   const [projectTitle, setProjectTitle] = useState<string | null>(null)
   const [pages, setPages] = useState<PageType[]>([]);
   const { pushSnapshot, undo, redo, canUndo, canRedo } = useHistory();
+
+  // Mark "create project" complete when opening an existing project
+  useEffect(() => {
+    if (isProjectPage) completeStep("create_project");
+  }, [isProjectPage]);
 
   // Credits / upgrade modal state
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -137,6 +143,8 @@ const ChatInterface = ({
             }
             return [...prev, { ...page, isLoading: false }]
           })
+          // Mark "generate first page" step complete
+          completeStep("generate_page");
           break;
         }
 
@@ -286,6 +294,8 @@ const ChatInterface = ({
     if (!isProjectPage && !hasStarted) {
       window.history.pushState(null, "", `/project/${slugId}`);
       setHasStarted(true)
+      // Mark "create first project" step complete
+      completeStep("create_project");
     }
 
     // Track generation start

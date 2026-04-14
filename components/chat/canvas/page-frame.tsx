@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { Code2, PaintbrushIcon, Trash2Icon, Download, RefreshCw, Pencil } from 'lucide-react';
+import { Code2, PaintbrushIcon, Trash2Icon, Download, RefreshCw, Pencil, Braces, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/ui/spinner';
 import { PageType } from '@/types/project';
@@ -51,6 +51,8 @@ const PageFrame = ({
   const [isRenamingInline, setIsRenamingInline] = useState(false);
   const [renameValue, setRenameValue] = useState(page.name);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const [copiedHtml, setCopiedHtml] = useState(false);
+  const [copiedCss, setCopiedCss] = useState(false);
 
   // Track whether the iframe has ever been rendered — once rendered we keep
   // it alive (just hidden) so it doesn't re-parse on every pan back
@@ -102,7 +104,27 @@ const PageFrame = ({
 
   const handleCopyCode = () => {
     navigator.clipboard.writeText(fullHtml);
-    toast.success("Design code copied to clipboard!");
+    setCopiedHtml(true);
+    toast.success("HTML copied to clipboard!");
+    setTimeout(() => setCopiedHtml(false), 2000);
+  };
+
+  const handleCopyCss = () => {
+    if (!page.rootStyles?.trim()) {
+      toast.error("No CSS variables found for this page.");
+      return;
+    }
+    // Format as a clean :root { ... } block for easy paste into any codebase
+    const cssBlock = `:root {\n${page.rootStyles
+      .split(";")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => `  ${line};`)
+      .join("\n")}\n}`;
+    navigator.clipboard.writeText(cssBlock);
+    setCopiedCss(true);
+    toast.success("CSS variables copied to clipboard!");
+    setTimeout(() => setCopiedCss(false), 2000);
   };
 
   const startRename = () => {
@@ -324,7 +346,7 @@ const PageFrame = ({
 
             <Popover open={showColorScheme} onOpenChange={setShowColorScheme}>
               <PopoverTrigger asChild>
-                <Button size="icon" variant="ghost" className="p-1! hover:bg-accent size-6! cursor-pointer">
+                <Button size="icon" variant="ghost" className="p-1! hover:bg-accent size-6! cursor-pointer" title="Color scheme">
                   <PaintbrushIcon className="size-3.5" />
                 </Button>
               </PopoverTrigger>
@@ -344,9 +366,72 @@ const PageFrame = ({
               </PopoverContent>
             </Popover>
 
-            <Button size="icon" variant="ghost" className="p-1! hover:bg-accent size-6! cursor-pointer" onClick={handleCopyCode}>
-              <Code2 className="size-3.5" />
+            {/* Copy CSS variables */}
+            <Button
+              size="icon"
+              variant="ghost"
+              className="p-1! hover:bg-accent size-6! cursor-pointer"
+              title="Copy CSS variables"
+              onClick={handleCopyCss}
+            >
+              <AnimatePresence mode="wait" initial={false}>
+                {copiedCss ? (
+                  <motion.span
+                    key="check-css"
+                    initial={{ scale: 0, rotate: -90 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    exit={{ scale: 0 }}
+                    transition={{ duration: 0.18 }}
+                  >
+                    <Check className="size-3.5 text-green-500" />
+                  </motion.span>
+                ) : (
+                  <motion.span
+                    key="icon-css"
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    exit={{ scale: 0 }}
+                    transition={{ duration: 0.18 }}
+                  >
+                    <Braces className="size-3.5" />
+                  </motion.span>
+                )}
+              </AnimatePresence>
             </Button>
+
+            {/* Copy HTML */}
+            <Button
+              size="icon"
+              variant="ghost"
+              className="p-1! hover:bg-accent size-6! cursor-pointer"
+              title="Copy HTML"
+              onClick={handleCopyCode}
+            >
+              <AnimatePresence mode="wait" initial={false}>
+                {copiedHtml ? (
+                  <motion.span
+                    key="check-html"
+                    initial={{ scale: 0, rotate: -90 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    exit={{ scale: 0 }}
+                    transition={{ duration: 0.18 }}
+                  >
+                    <Check className="size-3.5 text-green-500" />
+                  </motion.span>
+                ) : (
+                  <motion.span
+                    key="icon-html"
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    exit={{ scale: 0 }}
+                    transition={{ duration: 0.18 }}
+                  >
+                    <Code2 className="size-3.5" />
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </Button>
+
             <Button size="icon" variant="ghost" className="p-1! hover:bg-accent size-6! cursor-pointer" title="Download page" onClick={() => downloadPage(page)}>
               <Download className="size-3.5" />
             </Button>

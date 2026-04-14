@@ -33,6 +33,13 @@ import UpgradeButton from "@/components/credits/upgrade-button";
 import { type Folder, type FolderColor } from "@/lib/folders";
 import { getLastOpened, clearLastOpened, type LastOpenedEntry } from "@/lib/last-opened";
 import ContinueBanner from "./continue-banner";
+import OnboardingChecklist from "./onboarding-checklist";
+import {
+  getOnboardingState,
+  isChecklistComplete,
+  completeStep,
+  type OnboardingState,
+} from "@/lib/onboarding-checklist";
 
 export type DashboardProject = {
   id: string;
@@ -64,12 +71,34 @@ export default function DashboardClient({ user }: { user: Record<string, unknown
   const [activeFolder, setActiveFolder] = useState<string | null>(null);
   const [lastOpened, setLastOpenedState] = useState<LastOpenedEntry | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [checklistState, setChecklistState] = useState<OnboardingState | null>(null);
+  const [checklistDismissed, setChecklistDismissed] = useState(false);
 
-  // Read last-opened from localStorage on mount
+  // Read last-opened and checklist state from localStorage on mount
+  // Also re-read checklist when the tab becomes visible (user returns from canvas)
+  const refreshChecklist = useCallback(() => {
+    const onboarding = getOnboardingState();
+    if (!onboarding.dismissed && !isChecklistComplete(onboarding)) {
+      setChecklistState(onboarding);
+    } else {
+      setChecklistState(null);
+    }
+  }, []);
+
   useEffect(() => {
     const entry = getLastOpened("current_user");
     if (entry) setLastOpenedState(entry);
-  }, []);
+    refreshChecklist();
+  }, [refreshChecklist]);
+
+  // Re-read checklist when user returns to this tab from the canvas
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") refreshChecklist();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [refreshChecklist]);
 
   // Debounce search
   useEffect(() => {
@@ -123,6 +152,14 @@ export default function DashboardClient({ user }: { user: Record<string, unknown
   }, []);
 
   useEffect(() => { fetchProjects(debouncedSearch); }, [debouncedSearch, fetchProjects]);
+
+  // Auto-complete "create_project" step when projects exist
+  useEffect(() => {
+    if (projects.length > 0) {
+      completeStep("create_project");
+      refreshChecklist();
+    }
+  }, [projects.length, refreshChecklist]);
 
   // ── Project mutations ─────────────────────────────────────────────────────
   const handleRename = async (projectId: string, newTitle: string) => {
@@ -233,6 +270,8 @@ export default function DashboardClient({ user }: { user: Record<string, unknown
           setBannerDismissed(true);
           clearLastOpened("current_user");
         }}
+        checklistState={checklistDismissed ? null : checklistState}
+        onDismissChecklist={() => setChecklistDismissed(true)}
       />
     </KeyboardShortcutsProvider>
   );
@@ -267,6 +306,8 @@ type DashboardContentProps = {
   lastOpened: LastOpenedEntry | null;
   bannerDismissed: boolean;
   onDismissBanner: () => void;
+  checklistState: OnboardingState | null;
+  onDismissChecklist: () => void;
 };
 
 function DashboardContent({
@@ -297,6 +338,8 @@ function DashboardContent({
   lastOpened,
   bannerDismissed,
   onDismissBanner,
+  checklistState,
+  onDismissChecklist,
 }: DashboardContentProps) {
   const isPro = plan === "pro" || plan === "team";
 
@@ -418,6 +461,17 @@ function DashboardContent({
               project={lastOpenedProject}
               openedAt={lastOpened!.openedAt}
               onDismiss={onDismissBanner}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* ── Onboarding checklist ── */}
+        <AnimatePresence>
+          {checklistState && (
+            <OnboardingChecklist
+              key="onboarding"
+              state={checklistState}
+              onDismiss={onDismissChecklist}
             />
           )}
         </AnimatePresence>
