@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Check, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
+import UpgradeButton from "@/components/credits/upgrade-button";
 
 const PLANS = [
   {
@@ -16,6 +17,7 @@ const PLANS = [
     cta: "Get started free",
     ctaVariant: "outline" as const,
     href: "/auth/sign-up",
+    stripePlan: null as null | "pro" | "team",
     featured: false,
     features: [
       "10 AI generations per month",
@@ -33,7 +35,8 @@ const PLANS = [
     description: "For designers and developers who build seriously.",
     cta: "Start Pro — 7 days free",
     ctaVariant: "default" as const,
-    href: "/auth/sign-up",
+    href: null,
+    stripePlan: "pro" as const,
     featured: true,
     badge: "Most popular",
     features: [
@@ -54,7 +57,8 @@ const PLANS = [
     description: "For agencies and teams shipping client work.",
     cta: "Start Team trial",
     ctaVariant: "outline" as const,
-    href: "/auth/sign-up",
+    href: null,
+    stripePlan: "team" as const,
     featured: false,
     features: [
       "Everything in Pro",
@@ -127,13 +131,19 @@ export default function PricingSection() {
               </div>
 
               {/* CTA */}
-              <Button
-                variant={plan.ctaVariant}
-                className="w-full"
-                asChild
-              >
-                <Link href={plan.href}>{plan.cta}</Link>
-              </Button>
+              {plan.stripePlan ? (
+                <UpgradeButton
+                  plan={plan.stripePlan}
+                  variant={plan.ctaVariant}
+                  className="w-full"
+                >
+                  {plan.cta}
+                </UpgradeButton>
+              ) : (
+                <Button variant={plan.ctaVariant} className="w-full" asChild>
+                  <Link href={plan.href!}>{plan.cta}</Link>
+                </Button>
+              )}
 
               {/* Features */}
               <div className="flex flex-col gap-3">

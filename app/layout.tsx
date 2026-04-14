@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { InsforgeProvider } from "@/components/insforge-provider";
 import { QueryProvider } from "@/components/query-provider";
+import { PostHogProvider } from "@/components/analytics/posthog-provider";
 import { getCurrentUser } from "@/lib/insforge-server";
 import { buildMetadata, APP_URL } from "@/lib/metadata";
 
@@ -61,12 +62,12 @@ export default async function RootLayout({
                 disableTransitionOnChange
               >
                 <TooltipProvider>
-                  {children}
-
-                  <Toaster richColors />
+                  <PostHogProvider>
+                    {children}
+                    <Toaster richColors />
+                  </PostHogProvider>
                 </TooltipProvider>
               </ThemeProvider>
-
             </NuqsAdapter>
           </QueryProvider>
         </InsforgeProvider>

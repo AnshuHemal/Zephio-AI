@@ -1,5 +1,5 @@
 import { ChatStatus } from "ai";
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   PromptInput,
   PromptInputActionAddAttachments,
@@ -24,7 +24,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "../ui/item";
-import { ArrowUpIcon, LockIcon, Square, XIcon, Palette } from "lucide-react";
+import { ArrowUpIcon, LockIcon, Square, XIcon, Palette, History, Trash2 } from "lucide-react";
 import { Button } from "../ui/button";
 import {
   Attachment,
@@ -42,6 +42,10 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { useKeyboardShortcutsContext } from "@/components/keyboard-shortcuts-provider";
+import { getShortcutDisplay } from "@/hooks/use-keyboard-shortcuts";
+import { getPromptHistory, removeFromPromptHistory } from "@/lib/prompt-history";
+import { motion, AnimatePresence } from "motion/react";
 
 type ChatInputProps = {
   input: string;
@@ -65,8 +69,37 @@ const ChatInput = ({
   const { isSignedIn } = useAuth();
   const [showAuthBanner, setShowAuthBanner] = useState(false);
   const [activePreset, setActivePreset] = useState<StylePreset | null>(null);
+  const [history, setHistory] = useState<string[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const submitRef = useRef<(() => void) | null>(null);
+
+  // Load history when popover opens
+  const handleHistoryOpen = (open: boolean) => {
+    if (open) setHistory(getPromptHistory());
+    setHistoryOpen(open);
+  };
+
+  const handleSelectHistory = (prompt: string) => {
+    setInput(prompt);
+    setHistoryOpen(false);
+    // Focus textarea after selection
+    setTimeout(() => {
+      const textarea = document.querySelector<HTMLTextAreaElement>("textarea");
+      if (textarea) {
+        textarea.focus();
+        textarea.setSelectionRange(prompt.length, prompt.length);
+      }
+    }, 50);
+  };
+
+  const handleDeleteHistory = (e: React.MouseEvent, prompt: string) => {
+    e.stopPropagation();
+    removeFromPromptHistory(prompt);
+    setHistory((prev) => prev.filter((p) => p !== prompt));
+  };
 
   const { setSelectedPageId } = useCanvas();
+  const { registerSubmitHandler, registerEscapeHandler } = useKeyboardShortcutsContext();
 
   const handleSubmit = (message: PromptInputMessage) => {
     if (!isSignedIn) {
@@ -81,6 +114,24 @@ const ChatInput = ({
     });
     setSelectedPageId(null);
   };
+
+  // Register Cmd+Enter to submit
+  useEffect(() => {
+    const submit = () => {
+      if (input.trim() && !isLoading) {
+        handleSubmit({ text: input, files: [] });
+      }
+    };
+    submitRef.current = submit;
+    return registerSubmitHandler(submit);
+  }, [input, isLoading, registerSubmitHandler]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Register Escape to deselect page
+  useEffect(() => {
+    if (selectedPage) {
+      return registerEscapeHandler(() => setSelectedPageId(null));
+    }
+  }, [selectedPage, registerEscapeHandler, setSelectedPageId]);
 
   return (
     <div className="w-full flex flex-col gap-2">
@@ -211,6 +262,97 @@ const ChatInput = ({
                 </div>
               </PopoverContent>
             </Popover>
+
+            {/* Prompt history */}
+            <Popover open={historyOpen} onOpenChange={handleHistoryOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  className={cn(
+                    "rounded-md transition-colors",
+                    historyOpen
+                      ? "text-primary bg-primary/8 hover:bg-primary/12"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                  title="Prompt history"
+                >
+                  <History className="size-3.5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" side="top" className="w-80 p-0 overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2.5 border-b border-border">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                    Recent prompts
+                  </p>
+                  {history.length > 0 && (
+                    <span className="text-[10px] text-muted-foreground/60">
+                      Click to reuse
+                    </span>
+                  )}
+                </div>
+
+                <AnimatePresence initial={false}>
+                  {history.length === 0 ? (
+                    <motion.div
+                      key="empty"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="flex flex-col items-center justify-center gap-2 py-8 px-4 text-center"
+                    >
+                      <History className="size-6 text-muted-foreground/30" />
+                      <p className="text-xs text-muted-foreground">
+                        No prompts yet. Your history will appear here after you send a message.
+                      </p>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="list"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="flex flex-col max-h-64 overflow-y-auto py-1"
+                    >
+                      {history.map((prompt, i) => (
+                        <motion.div
+                          key={prompt}
+                          initial={{ opacity: 0, x: -8 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: 8, height: 0 }}
+                          transition={{ delay: i * 0.03, duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                          className="group flex items-start gap-2 px-2 py-1.5 mx-1 rounded-lg hover:bg-accent cursor-pointer transition-colors"
+                          onClick={() => handleSelectHistory(prompt)}
+                        >
+                          <History className="size-3 mt-0.5 shrink-0 text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
+                          <span className="flex-1 text-xs text-foreground leading-relaxed line-clamp-2 min-w-0">
+                            {prompt}
+                          </span>
+                          <button
+                            onClick={(e) => handleDeleteHistory(e, prompt)}
+                            className="shrink-0 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all mt-0.5"
+                            title="Remove"
+                          >
+                            <Trash2 className="size-3" />
+                          </button>
+                        </motion.div>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </PopoverContent>
+            </Popover>
+
+            {/* Keyboard shortcut hints */}
+            <div className="hidden sm:flex items-center gap-1.5 ml-auto mr-2 text-[11px] text-muted-foreground">
+              <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border font-mono text-[10px]">
+                {getShortcutDisplay({ key: "K", metaKey: true })}
+              </kbd>
+              <span>commands</span>
+              <span className="mx-1">•</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border font-mono text-[10px]">
+                {getShortcutDisplay({ key: "Enter", metaKey: true })}
+              </kbd>
+              <span>send</span>
+            </div>
           </PromptInputTools>
 
           {isLoading ? (

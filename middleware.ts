@@ -15,6 +15,11 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const ip = getClientIp(request);
 
+  // ── Stripe webhook — skip all rate limiting, Stripe handles its own security ──
+  if (pathname === "/api/stripe/webhook") {
+    return NextResponse.next();
+  }
+
   // ── Auth endpoints — strict limiting ──────────────────────────────────
   if (pathname.startsWith("/api/auth") || pathname.startsWith("/auth/")) {
     const result = rateLimit(ip, authLimiter);

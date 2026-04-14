@@ -34,7 +34,6 @@ export async function signUpAction(formData: FormData) {
   const email = String(formData.get('email') ?? '').trim()
   const password = String(formData.get('password') ?? '')
   const fullName = String(formData.get('fullName') ?? '').trim()
-  const redirectTo = String(formData.get('redirectTo') ?? '/')
 
   if (!email || !password) {
     return { success: false, error: 'Email and password are required.' }
@@ -140,4 +139,50 @@ export async function signOutAction() {
   await insforge.auth.signOut()
   await clearAuthCookies()
   redirect('/')
+}
+
+// ── Password reset ────────────────────────────────────────────────────────────
+
+/**
+ * Step 1 — Send a password reset email.
+ * Always returns success to prevent email enumeration.
+ */
+export async function forgotPasswordAction(formData: FormData) {
+  const email = String(formData.get('email') ?? '').trim()
+
+  if (!email) return { success: false, error: 'Email is required.' }
+
+  const emailCheck = validateEmail(email)
+  if (!emailCheck.valid) return { success: false, error: emailCheck.reason }
+
+  try {
+    const insforge = await createInsForgeServerClient()
+    await insforge.auth.sendResetPasswordEmail({ email })
+  } catch {
+    // Swallow errors — never reveal whether an email exists
+  }
+
+  // Always return success to prevent email enumeration
+  return { success: true }
+}
+
+/**
+ * Step 2 — Set a new password using the OTP from the reset email.
+ */
+export async function resetPasswordAction(formData: FormData) {
+  const otp = String(formData.get('otp') ?? '').trim()
+  const newPassword = String(formData.get('newPassword') ?? '')
+  const confirmPassword = String(formData.get('confirmPassword') ?? '')
+
+  if (!otp) return { success: false, error: 'Reset code is required.' }
+  if (!newPassword) return { success: false, error: 'New password is required.' }
+  if (newPassword.length < 8) return { success: false, error: 'Password must be at least 8 characters.' }
+  if (newPassword !== confirmPassword) return { success: false, error: 'Passwords do not match.' }
+
+  const insforge = await createInsForgeServerClient()
+  const { error } = await insforge.auth.resetPassword({ newPassword, otp })
+
+  if (error) return { success: false, error: error.message ?? 'Reset failed. The code may have expired.' }
+
+  return { success: true }
 }

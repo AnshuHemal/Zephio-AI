@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { TOOL_MODE_ENUM, ToolModeType } from "@/constants/canvas";
 import { cn } from "@/lib/utils";
@@ -7,6 +7,7 @@ import CanvasControls from "./canvas-controls";
 import PageFrame from "./page-frame";
 import PageSidebar from "./page-sidebar";
 import { useCanvas } from "@/hooks/use-canvas";
+import { useCanvasViewport } from "@/hooks/use-canvas-viewport";
 import { PageType } from "@/types/project";
 import { deletePageAction } from "@/app/action/action";
 import { toast } from "sonner";
@@ -27,6 +28,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useAnalytics } from "@/lib/analytics";
+import { useKeyboardShortcutsContext } from "@/components/keyboard-shortcuts-provider";
+import { getShortcutDisplay } from "@/hooks/use-keyboard-shortcuts";
+import EmptyCanvas from "./empty-canvas";
 
 type PropsType = {
   pages: PageType[];
@@ -40,6 +45,9 @@ type PropsType = {
   onRedo: () => void;
   onRegeneratePage?: (pageId: string) => void;
   onRenamePage?: (pageId: string, newName: string) => void;
+  onGeneratePage?: () => void;
+  onReorderPages?: (reordered: PageType[]) => void;
+  isPro?: boolean;
 };
 
 const Canvas = ({
@@ -54,6 +62,9 @@ const Canvas = ({
   onRedo,
   onRegeneratePage,
   onRenamePage,
+  onGeneratePage,
+  onReorderPages,
+  isPro = false,
 }: PropsType) => {
   const queryClient = useQueryClient();
   const [toolMode, setToolMode] = useState<ToolModeType>(TOOL_MODE_ENUM.SELECT);
@@ -63,6 +74,19 @@ const Canvas = ({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
   const { selectedPageId, setSelectedPageId } = useCanvas();
+  const { capture } = useAnalytics();
+  const { registerEscapeHandler } = useKeyboardShortcutsContext();
+
+  // ── Viewport virtualization ──────────────────────────────────────────────
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const { visibleIndices, onTransformed: onViewportTransformed } = useCanvasViewport(canvasContainerRef);
+
+  // Register Escape to deselect page
+  useEffect(() => {
+    if (selectedPageId) {
+      return registerEscapeHandler(() => setSelectedPageId(null));
+    }
+  }, [selectedPageId, registerEscapeHandler, setSelectedPageId]);
 
   const handleDelete = async (pageId: string) => {
     setDeletingPageId(pageId);
@@ -79,13 +103,47 @@ const Canvas = ({
   };
 
   const handleReorder = (reordered: PageType[]) => {
-    setPages(reordered);
+    // If a parent handler is provided (with pushSnapshot), use it.
+    // Otherwise fall back to direct setPages (no undo for this reorder).
+    if (onReorderPages) {
+      onReorderPages(reordered);
+    } else {
+      setPages(reordered);
+    }
+  };
+
+  const handlePageRestored = (updatedPage: PageType) => {
+    setPages((prev) =>
+      prev.map((p) => (p.id === updatedPage.id ? { ...p, ...updatedPage, isLoading: false } : p))
+    );
+  };
+
+  const handleDuplicatePage = (sourcePageId: string, newPage: PageType) => {
+    setPages((prev) => {
+      // Insert the duplicate right after the source page by ID — reliable regardless of name
+      const sourceIndex = prev.findIndex((p) => p.id === sourcePageId);
+      const next = [...prev];
+      next.splice(sourceIndex === -1 ? next.length : sourceIndex + 1, 0, newPage);
+      return next;
+    });
+    // Select the new page so the user sees it immediately
+    setSelectedPageId(newPage.id);
+  };
+
+  const handleAddPage = (newPage: PageType) => {
+    setPages((prev) => [...prev, newPage]);
+    setSelectedPageId(newPage.id);
   };
 
   const handleDownloadAll = async () => {
     if (pages.length === 0) return;
     setIsDownloading(true);
-    await downloadAllPages(pages, projectTitle || "zephio-project");
+    await downloadAllPages(pages, projectTitle || "zephio-project", isPro);
+    capture("export_downloaded", {
+      slug_id: slugId,
+      page_count: pages.length,
+      format: pages.length === 1 ? "single_html" : "zip",
+    });
     setIsDownloading(false);
   };
 
@@ -93,6 +151,10 @@ const Canvas = ({
     const url = `${window.location.origin}/preview/${slugId}`;
     navigator.clipboard.writeText(url);
     toast.success("Preview link copied to clipboard!");
+    capture("share_link_copied", {
+      slug_id: slugId,
+      page_count: pages.length,
+    });
   };
 
   const visiblePages = pages.filter((p) => !p.isLoading || p.htmlContent);
@@ -115,11 +177,17 @@ const Canvas = ({
                 pages={pages}
                 selectedPageId={selectedPageId}
                 deletingPageId={deletingPageId}
+                slugId={slugId}
                 onSelectPage={setSelectedPageId}
                 onDeletePage={handleDelete}
+                onDuplicatePage={handleDuplicatePage}
+                onAddPage={handleAddPage}
+                onGeneratePage={onGeneratePage ?? (() => {})}
                 onReorder={handleReorder}
                 onRenamePage={onRenamePage ?? (() => {})}
+                onPageRestored={handlePageRestored}
                 isProjectLoading={isProjectLoading}
+                isPro={isPro}
               />
             </div>
           </motion.div>
@@ -127,7 +195,7 @@ const Canvas = ({
       </AnimatePresence>
 
       {/* ── Canvas area ── */}
-      <div className="relative flex-1 overflow-hidden">
+      <div ref={canvasContainerRef} className="relative flex-1 overflow-hidden">
         {/* Top toolbar */}
         <div className="absolute left-0 right-0 top-0 z-20 flex items-center justify-between px-3 py-2 pointer-events-none">
           {/* Left: sidebar toggle */}
@@ -168,7 +236,9 @@ const Canvas = ({
                   <Undo2 className="size-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">Undo (⌘Z)</TooltipContent>
+              <TooltipContent side="bottom">
+                Undo ({getShortcutDisplay({ key: "Z", metaKey: true })})
+              </TooltipContent>
             </Tooltip>
 
             {/* Redo */}
@@ -184,7 +254,9 @@ const Canvas = ({
                   <Redo2 className="size-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">Redo (⌘⇧Z)</TooltipContent>
+              <TooltipContent side="bottom">
+                Redo ({getShortcutDisplay({ key: "Z", metaKey: true, shiftKey: true })})
+              </TooltipContent>
             </Tooltip>
 
             <div className="h-4 w-px bg-border mx-0.5" />
@@ -243,11 +315,19 @@ const Canvas = ({
           limitToBounds={false}
           panning={{ disabled: toolMode !== TOOL_MODE_ENUM.HAND }}
           onTransformed={(ref) => {
-            setZoomPercent(Math.round(ref.state.scale * 100));
-            setCurrentScale(ref.state.scale);
+            const { scale, positionX, positionY } = ref.state;
+            setZoomPercent(Math.round(scale * 100));
+            setCurrentScale(scale);
+            // Feed transform state into the viewport calculator
+            const selectedIndex = pages.findIndex(p => p.id === selectedPageId);
+            onViewportTransformed(
+              { scale, positionX, positionY },
+              pages.length,
+              selectedIndex
+            );
           }}
         >
-          {({ zoomIn, zoomOut }) => (
+          {({ zoomIn, zoomOut, resetTransform }) => (
             <>
               <div
                 className={cn(
@@ -270,6 +350,13 @@ const Canvas = ({
                   </div>
                 )}
 
+                {/* Empty canvas state — shown when no pages exist yet */}
+                <AnimatePresence>
+                  {!isProjectLoading && pages.length === 0 && (
+                    <EmptyCanvas />
+                  )}
+                </AnimatePresence>
+
                 <TransformComponent
                   wrapperStyle={{ width: "100%", height: "100%", overflow: "unset" }}
                   contentStyle={{ width: "100%", height: "100%" }}
@@ -278,6 +365,12 @@ const Canvas = ({
                     const x = 100 + i * 1600;
                     const y = 100;
                     const isDeleting = deletingPageId === page.id;
+                    // A page is visible if the viewport hook says so, OR if it's
+                    // selected (always keep selected page live), OR if it's loading
+                    const isVisible =
+                      visibleIndices.has(i) ||
+                      page.id === selectedPageId ||
+                      !!page.isLoading;
                     return (
                       <PageFrame
                         key={page.id}
@@ -288,6 +381,7 @@ const Canvas = ({
                         selectedPageId={selectedPageId}
                         setSelectedPageId={setSelectedPageId}
                         isDeleting={isDeleting}
+                        isVisible={isVisible}
                         onDeletePage={handleDelete}
                         onRegeneratePage={onRegeneratePage}
                         onRenamePage={onRenamePage}
@@ -300,6 +394,7 @@ const Canvas = ({
               <CanvasControls
                 zoomIn={zoomIn}
                 zoomOut={zoomOut}
+                resetView={() => resetTransform()}
                 zoomPercent={zoomPercent}
                 toolMode={toolMode}
                 setToolMode={setToolMode}

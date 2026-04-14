@@ -1,9 +1,12 @@
 "use client";
 
 import { motion, AnimatePresence } from "motion/react";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Zap, X, Check, Sparkles } from "lucide-react";
+import { useAnalytics } from "@/lib/analytics";
+import { useEffect } from "react";
+import { useKeyboardShortcutsContext } from "@/components/keyboard-shortcuts-provider";
+import UpgradeButton from "./upgrade-button";
 
 type Props = {
   open: boolean;
@@ -11,6 +14,8 @@ type Props = {
   limit: number;
   resetAt?: string;
   onClose: () => void;
+  trigger?: "limit_reached" | "credits_badge" | "manual";
+  plan?: string;
 };
 
 const PRO_FEATURES = [
@@ -22,10 +27,32 @@ const PRO_FEATURES = [
   "Email support",
 ];
 
-export default function UpgradeModal({ open, used, limit, resetAt, onClose }: Props) {
+export default function UpgradeModal({ open, used, limit, resetAt, onClose, trigger = "manual", plan = "free" }: Props) {
   const resetDate = resetAt
     ? new Date(resetAt).toLocaleDateString("en-US", { month: "long", day: "numeric" })
     : null;
+
+  const { capture } = useAnalytics();
+  const { registerEscapeHandler } = useKeyboardShortcutsContext();
+
+  // Track when the modal becomes visible
+  useEffect(() => {
+    if (open) {
+      capture("upgrade_modal_opened", { trigger, used, limit, plan });
+    }
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Register Escape to close modal
+  useEffect(() => {
+    if (open) {
+      return registerEscapeHandler(onClose);
+    }
+  }, [open, registerEscapeHandler, onClose]);
+
+  const handleUpgradeClick = () => {
+    capture("upgrade_clicked", { source: "modal", plan_selected: "pro" });
+    onClose();
+  };
 
   return (
     <AnimatePresence>
@@ -115,12 +142,13 @@ export default function UpgradeModal({ open, used, limit, resetAt, onClose }: Pr
 
                 {/* CTAs */}
                 <div className="flex flex-col gap-2">
-                  <Button className="w-full gap-2 font-semibold" asChild>
-                    <Link href="/#pricing" onClick={onClose}>
-                      <Zap className="size-4 fill-primary-foreground/20" />
-                      Upgrade to Pro
-                    </Link>
-                  </Button>
+                  <UpgradeButton
+                    plan="pro"
+                    className="w-full"
+                    onSuccess={onClose}
+                  >
+                    Upgrade to Pro
+                  </UpgradeButton>
                   <Button variant="ghost" className="w-full text-muted-foreground" onClick={onClose}>
                     {resetDate ? `Wait until ${resetDate}` : "Maybe later"}
                   </Button>

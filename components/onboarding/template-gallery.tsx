@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { TEMPLATES, TEMPLATE_CATEGORIES, type Template } from "@/lib/templates";
 import { cn } from "@/lib/utils";
 import { ArrowRight } from "lucide-react";
+import { useAnalytics } from "@/lib/analytics";
 
 type Props = {
   onSelect: (prompt: string) => void;
@@ -13,11 +14,21 @@ type Props = {
 export default function TemplateGallery({ onSelect }: Props) {
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const [hovered, setHovered] = useState<string | null>(null);
+  const { capture } = useAnalytics();
 
   const filtered =
     activeCategory === "All"
       ? TEMPLATES
       : TEMPLATES.filter((t) => t.category === activeCategory);
+
+  const handleSelect = (template: Template) => {
+    capture("template_selected", {
+      template_id: template.id,
+      template_label: template.label,
+      template_category: template.category,
+    });
+    onSelect(template.prompt);
+  };
 
   return (
     <div className="w-full">
@@ -52,7 +63,7 @@ export default function TemplateGallery({ onSelect }: Props) {
               index={i}
               isHovered={hovered === template.id}
               onHover={setHovered}
-              onSelect={onSelect}
+              onSelect={() => handleSelect(template)}
             />
           ))}
         </AnimatePresence>
@@ -72,7 +83,7 @@ function TemplateCard({
   index: number;
   isHovered: boolean;
   onHover: (id: string | null) => void;
-  onSelect: (prompt: string) => void;
+  onSelect: () => void;
 }) {
   return (
     <motion.button
@@ -81,7 +92,7 @@ function TemplateCard({
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.94 }}
       transition={{ delay: index * 0.03, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-      onClick={() => onSelect(template.prompt)}
+      onClick={() => onSelect()}
       onMouseEnter={() => onHover(template.id)}
       onMouseLeave={() => onHover(null)}
       className="group relative flex flex-col items-start gap-2.5 rounded-xl border border-border bg-card p-3.5 text-left hover:border-primary/30 hover:shadow-md transition-all duration-200 cursor-pointer"

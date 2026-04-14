@@ -17,8 +17,8 @@ const LINKS = {
     { label: "Careers", href: "#" },
   ],
   Legal: [
-    { label: "Privacy Policy", href: "#" },
-    { label: "Terms of Service", href: "#" },
+    { label: "Privacy Policy", href: "/privacy" },
+    { label: "Terms of Service", href: "/terms" },
   ],
 };
 
@@ -75,9 +75,15 @@ export default function LandingFooter() {
           <p className="text-sm text-muted-foreground">
             © {new Date().getFullYear()} Zephio. All rights reserved.
           </p>
-          <p className="text-sm text-muted-foreground">
-            AI that designs. You that decides.
-          </p>
+          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            <Link href="/terms" className="hover:text-foreground transition-colors">
+              Terms
+            </Link>
+            <span className="text-border">·</span>
+            <Link href="/privacy" className="hover:text-foreground transition-colors">
+              Privacy
+            </Link>
+          </div>
         </div>
       </div>
     </footer>

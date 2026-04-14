@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 
     let query = insforge.database
       .from("projects")
-      .select("id, title, slugId, createdAt, updatedAt")
+      .select("id, title, slugId, createdAt, updatedAt, folderId")
       .eq("userId", user.id)
       .order("updatedAt", { ascending: false })
       .range(offset, offset + limit - 1);
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
     const projectIds = projects.map((p: any) => p.id);
     const { data: firstPages } = await insforge.database
       .from("pages")
-      .select("id, projectId, name, rootStyles, htmlContent")
+      .select("id, projectId, name, rootStyles")
       .in("projectId", projectIds)
       .order("createdAt", { ascending: true });
 

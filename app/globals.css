@@ -206,3 +206,53 @@
     opacity: 1;
   }
 }
+
+/* ── Legal page prose styles ─────────────────────────────────────────── */
+.prose-legal {
+  @apply text-sm leading-relaxed text-muted-foreground;
+}
+
+.prose-legal p {
+  @apply mb-4;
+}
+
+.prose-legal p:last-child {
+  @apply mb-0;
+}
+
+.prose-legal ul {
+  @apply mb-4 ml-4 flex flex-col gap-2 list-none;
+}
+
+.prose-legal ul li {
+  @apply relative pl-5;
+}
+
+.prose-legal ul li::before {
+  content: "";
+  @apply absolute left-0 top-[0.55em] h-1.5 w-1.5 rounded-full bg-primary/60;
+}
+
+.prose-legal ol {
+  @apply mb-4 ml-4 flex flex-col gap-2 list-decimal;
+}
+
+.prose-legal ol li {
+  @apply pl-1;
+}
+
+.prose-legal strong {
+  @apply font-semibold text-foreground;
+}
+
+.prose-legal a {
+  @apply font-medium text-foreground underline underline-offset-4 hover:text-primary transition-colors;
+}
+
+.prose-legal h3 {
+  @apply mt-6 mb-2 text-base font-semibold text-foreground;
+}
+
+.prose-legal .highlight-box {
+  @apply my-4 rounded-xl border border-border bg-card px-5 py-4 text-sm;
+}

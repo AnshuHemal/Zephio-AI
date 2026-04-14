@@ -1,100 +1,88 @@
-What's already solid
-You've built a lot. Core AI pipeline, streaming canvas, chat interface, auth, credits/limits, rate limiting, Sentry, email notifications, dashboard, onboarding, SEO, undo/redo, page/project rename, feedback, style presets, export, share preview, dark mode. That's a real product.
+What Zephio Needs Next — Prioritized by Impact
+🔴 Critical (Revenue & Retention Blockers)
+1. Stripe Payments
 
-What's still missing — in priority order
-1. Stripe Payments (Critical — do this first)
+This is the single most important thing. You have a complete credits system, upgrade modal, pricing page, and plan tiers — but zero way to actually collect money. The upgrade button goes to /#pricing which does nothing. Every user who hits their 10-generation limit and wants to pay has no path forward. You're actively losing revenue right now.
 
-You have a credits system, an upgrade modal, and a pricing page — but zero way to actually pay. The upgrade button currently links to /#pricing which goes nowhere useful. Without this, you literally cannot make money.
+What you need:
 
-You need:
-
-stripe.ts
- — Stripe client singleton
-POST /api/stripe/checkout — creates a Checkout session, redirects to Stripe
+POST /api/stripe/checkout — creates a Stripe Checkout session and redirects
 POST /api/stripe/webhook — handles checkout.session.completed, subscription.updated, subscription.deleted — updates user_credits.plan in the DB
-POST /api/stripe/portal — opens the Stripe Customer Portal for cancellation/billing management
-upgrade-button.tsx
- — a real button that hits /api/stripe/checkout
-Wire the upgrade modal and pricing section to use the real button
-Add a "Manage billing" link in the dashboard header for Pro users
-Add STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_PRO_MONTHLY, STRIPE_PRICE_TEAM_MONTHLY to .env
-The user_credits table also needs a stripeCustomerId column so you can link users to Stripe customers.
+POST /api/stripe/portal — opens the Stripe Customer Portal for billing management
+A real upgrade button that hits the checkout endpoint
+A "Manage billing" link in the dashboard header for Pro users
+stripeCustomerId column on user_credits table to link users to Stripe customers
+Add STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_PRO_MONTHLY to .env
+Without this, everything else is polish on a product that can't make money.
 
-2. Terms of Service & Privacy Policy
+2. Forgot Password Flow
 
-Stripe requires these before you can go live. So does the law in most jurisdictions if you're collecting emails and payments. Use Termly or Iubenda — both generate compliant docs in under 10 minutes. Then:
+Right now there's no "Forgot password?" link on the sign-in page. If a user forgets their password, they're locked out forever. This is a silent churn driver — users who can't get back in just leave. It's a 30-minute implementation using Insforge's built-in password reset email flow.
 
-Add /terms and /privacy pages
-Update the footer links (currently # placeholders) to point to them
-Link them in the sign-up form ("By signing up you agree to our Terms and Privacy Policy")
-3. Product Analytics
+3. "Built with Zephio" Watermark on Free Exports
 
-You have Sentry for errors but no visibility into user behavior. You're flying blind on:
+Every free export should have a small, tasteful badge in the footer — "Made with Zephio". Pro users get clean exports. This does two things simultaneously: creates a viral loop where every shared page advertises Zephio, and gives free users a concrete, tangible reason to upgrade. It costs nothing to implement and compounds over time. The export logic is already in 
+export.ts
+ — you just inject a small footer div into the HTML wrapper for free plan users.
 
-Which prompts users actually type
-Where they drop off (generate but never export?)
-Conversion rate from free → paid
-Which templates get used most
-PostHog is the best fit — open source, generous free tier, works perfectly with Next.js App Router. Add it to 
-layout.tsx
- and track these events:
+🟡 High Impact (Retention & Engagement)
+4. Project Folders / Organization
 
-generation_started / generation_completed
-export_downloaded
-share_link_copied
-upgrade_modal_opened / upgrade_clicked
-template_selected
-Without this data, you're guessing at what to improve.
+Right now all projects are in one flat list. A user who's been using Zephio for 3 months will have 30+ projects with no way to organize them. Adding simple folders (or tags) lets users group projects by client, type, or status. This is a retention feature — organized users feel in control and keep coming back. The dashboard already has search, so the infrastructure is there.
 
-4. "Built with Zephio" Watermark on Free Exports
+5. Duplicate Page Within a Project
 
-Every free export should include a small, tasteful badge in the footer of generated pages — something like "Made with Zephio". Pro users get clean exports. This does two things:
+Users can duplicate entire projects but can't duplicate a single page within a project. This is a very common workflow — "I like this page, let me make a variation of it." The page sidebar already has rename, delete, download, and history buttons. Adding a duplicate button there is a small addition with high daily-use value.
 
-Creates a viral loop — every shared page is a Zephio ad
-Gives free users a real, tangible reason to upgrade
-This is a growth mechanic that costs you nothing to implement and compounds over time.
+6. "Add New Page" Button in the Sidebar
 
-5. Generation History / Version Control
+Currently users can only add pages by prompting the AI. But sometimes a user wants to manually add a blank page or a page based on an existing one. A simple "+" button at the bottom of the page sidebar that either creates a blank page or prompts the AI to generate one would reduce friction significantly.
 
-Right now if a user regenerates a page, the old version is gone forever. This is a trust killer — users won't experiment freely if they know they can't go back. The fix is simple: store the last 3 versions of each page's HTML in the DB and let users restore them. A small "history" icon on each page in the sidebar that opens a version picker is all you need.
+7. Project Last-Opened Sorting + "Continue where you left off"
 
-6. Canvas Performance with Many Pages
+The dashboard sorts by updatedAt which is good, but there's no visual "resume" affordance. When a user returns to the dashboard, they should see their most recent project highlighted or pinned at the top with a "Continue →" button. This reduces the cognitive load of "which project was I working on?" and improves time-to-canvas on return visits.
 
-Every page renders a live iframe even when off-screen. With 5+ pages this gets heavy — slow scroll, high memory, janky interactions. The fix is iframe virtualization: only render the iframe content when the page is within the visible viewport. This is a significant UX improvement for power users building multi-page sites.
+8. Prompt History / Suggestions
 
-7. Mobile-Responsive Dashboard
+When a user is in the chat input, they have no memory of what they've typed before. Adding a simple dropdown that shows their last 5-10 prompts (stored in localStorage) lets them quickly reuse or iterate on previous prompts. This is especially useful for power users who have a set of prompts they use repeatedly. The chat input already has a popover for style presets — this fits naturally alongside it.
 
-The canvas doesn't need to work on mobile, but the dashboard is the home screen users return to every session. The project card grid, search bar, and view toggle need to be tested and polished on small screens. Right now it likely breaks at 375px.
+🟢 Polish & Delight (UX Quality)
+9. Page Reorder Confirmation / Undo
 
-8. Keyboard Shortcuts
+Users can drag pages to reorder them in the sidebar, but if they accidentally drop a page in the wrong position, there's no undo for that specific action. The undo/redo system tracks page content changes but not order changes. Adding order changes to the history stack would make the reorder feature feel safe to use.
 
-Power users expect them. You already have Cmd+Z/Redo. Add:
+10. Canvas "Fit to Screen" / "Reset View" Button
 
-Cmd+Enter to submit the prompt
-Escape to close modals / deselect page
-Cmd+K for a command palette (search projects, create new, etc.)
-The command palette (cmdk) is already in your package.json — it's just not wired up.
+The canvas has zoom in/out controls but no "fit all pages to screen" or "reset to default zoom" button. When a user has 5+ pages and has panned far away, there's no quick way to get back to a sensible view. A single button in the canvas controls that resets to the initial scale (26%) and position would be very useful. This is a one-line addition to the canvas controls.
 
-9. "Copy Link" Button on the Preview Page
+11. Page Preview on Hover in Sidebar
 
-The preview page exists but there's no obvious way to share it further. Someone receives a preview link, opens it, loves it — and has no easy way to forward it. Add a prominent "Copy link" button in the preview header. One line of code, high impact.
+The page sidebar shows page names and numbers but no visual preview. Adding a hover tooltip that shows a small thumbnail (using the same CSS-based ProjectThumbnail approach you just built) would let users quickly identify pages without clicking through them. This is especially useful for projects with 5+ pages where names like "Home", "About", "Contact" don't tell you much about the visual state.
 
-10. Empty Canvas State
+12. Export to Figma / Copy CSS Variables
 
-When a user starts a new project and hasn't generated anything yet, the canvas is a blank grid with no guidance. Add a centered prompt: "Describe your vision in the chat →" with a subtle arrow pointing to the input. Reduces confusion for new users, improves time-to-first-generation.
+Power users — especially designers — want to take their generated designs into Figma or their own codebase. Adding a "Copy CSS variables" button that copies the rootStyles block to clipboard, and a "Copy HTML" button that copies the raw HTML, would make Zephio a better tool for professional workflows. These are zero-backend features that live entirely in the client.
 
-11. Project Thumbnail Screenshots
+13. Onboarding Checklist for New Users
 
-The dashboard currently renders a live scaled-down iframe as the thumbnail. This is slow, causes layout issues, and is heavy on memory when you have 20+ projects. The better approach: generate a static PNG screenshot when a project is saved and store it. Even a CSS-based placeholder showing the color scheme would be better than a live iframe.
+New users land on the dashboard and see an empty state with example prompts. But there's no guided path that says "here's what to do next." A simple checklist — "Create your first project ✓", "Generate your first page ✓", "Export your design", "Share a preview link" — with completion tracking in localStorage would give new users a sense of progress and guide them toward the key value moments. Each completed step is a micro-win that builds habit.
 
-12. Webhook Security Reminder
+14. "What's New" / Changelog Notification
 
-When you implement Stripe, always verify the webhook signature using stripe.webhooks.constructEvent() before processing any event. Never trust a raw POST to your webhook endpoint — anyone can fake a payment without signature verification.
+When you ship new features (like keyboard shortcuts, version history, etc.), users who are already signed up have no way to know. A small notification dot on a "What's new" button in the dashboard header that shows a changelog modal would keep existing users engaged and aware of improvements. This is also a retention tool — users who know the product is actively improving are less likely to churn.
 
-Priority order
-Week 1:  Stripe payments + ToS/Privacy pages
-Week 2:  Analytics (PostHog) + Watermark on free exports
-Week 3:  Generation history + Canvas performance
-Week 4:  Mobile dashboard + Keyboard shortcuts (cmdk)
-Week 5:  Thumbnail screenshots + Empty canvas state + Copy link on preview
-The single most important thing right now is Stripe. Everything else is polish — Stripe is survival. Want me to implement it?
+📊 Analytics & Business Intelligence
+15. Admin Dashboard (Internal)
+
+You have PostHog for user behavior, but no internal view of business metrics. A simple internal page (protected by an admin check) showing total users, active users this week, generations per day, free vs pro conversion rate, and top prompts would let you make data-driven decisions. This doesn't need to be fancy — even a simple /admin page with a few numbers would be valuable.
+
+Priority Order
+Week	Focus
+Now	Stripe payments — this is survival, not polish
+Week 1	Forgot password + Watermark on free exports
+Week 2	Duplicate page + Add new page button + Fit to screen
+Week 3	Project folders + Prompt history + Onboarding checklist
+Week 4	Page preview on hover + Export CSS variables + What's new
+Later	Admin dashboard + Canvas undo for reorder
+The One Thing
+If you only do one thing from this list, do Stripe. Everything else is making a better product. Stripe is making a business. You have users, you have a pricing page, you have an upgrade modal — you're one integration away from revenue. Every day without it is money left on the table.

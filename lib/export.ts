@@ -1,11 +1,38 @@
 import { getHTMLWrapper } from "./page-wrapper";
 import { PageType } from "@/types/project";
 
+const WATERMARK_HTML = `
+<a href="https://zephio.app" target="_blank" rel="noopener" style="
+  position:fixed;bottom:16px;right:16px;z-index:99999;
+  display:flex;align-items:center;gap:6px;
+  background:rgba(0,0,0,0.65);backdrop-filter:blur(8px);
+  border:1px solid rgba(255,255,255,0.12);
+  border-radius:999px;padding:5px 12px 5px 8px;
+  font-family:system-ui,sans-serif;font-size:11px;font-weight:600;
+  color:#fff;letter-spacing:0.01em;text-decoration:none;
+  box-shadow:0 2px 12px rgba(0,0,0,0.3);">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13 2L4.5 13.5H11L10 22L20.5 10H14L13 2Z" fill="white" stroke="white" stroke-width="1.5" stroke-linejoin="round"/></svg>
+  Made with Zephio
+</a>`.trim();
+
+/**
+ * Injects the watermark badge into an HTML string.
+ * Inserts just before </body> so it renders on top of all page content.
+ */
+function injectWatermark(html: string): string {
+  if (html.includes("</body>")) {
+    return html.replace("</body>", `${WATERMARK_HTML}\n</body>`);
+  }
+  return html + WATERMARK_HTML;
+}
+
 /**
  * Downloads a single page as a self-contained .html file.
+ * @param isPro - when true, exports without watermark
  */
-export function downloadPage(page: PageType): void {
-  const html = getHTMLWrapper(page.htmlContent, page.name, page.rootStyles, page.id);
+export function downloadPage(page: PageType, isPro = false): void {
+  let html = getHTMLWrapper(page.htmlContent, page.name, page.rootStyles, page.id);
+  if (!isPro) html = injectWatermark(html);
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -17,26 +44,26 @@ export function downloadPage(page: PageType): void {
 
 /**
  * Downloads all pages as individual .html files inside a .zip archive.
- * Uses the native File System Access API with a fallback to sequential downloads.
+ * @param isPro - when true, exports without watermark
  */
 export async function downloadAllPages(
   pages: PageType[],
-  projectTitle: string
+  projectTitle: string,
+  isPro = false
 ): Promise<void> {
   if (pages.length === 0) return;
 
-  // Try to use JSZip if available (loaded dynamically to keep bundle small)
   try {
     const JSZip = (await import("jszip")).default;
     const zip = new JSZip();
     const folder = zip.folder(slugify(projectTitle) || "zephio-project")!;
 
     pages.forEach((page) => {
-      const html = getHTMLWrapper(page.htmlContent, page.name, page.rootStyles, page.id);
+      let html = getHTMLWrapper(page.htmlContent, page.name, page.rootStyles, page.id);
+      if (!isPro) html = injectWatermark(html);
       folder.file(`${slugify(page.name)}.html`, html);
     });
 
-    // Add a simple index.html that links to all pages
     const indexHtml = buildIndexPage(pages, projectTitle);
     folder.file("index.html", indexHtml);
 
@@ -48,9 +75,8 @@ export async function downloadAllPages(
     a.click();
     URL.revokeObjectURL(url);
   } catch {
-    // Fallback: download each page individually
     pages.forEach((page, i) => {
-      setTimeout(() => downloadPage(page), i * 300);
+      setTimeout(() => downloadPage(page, isPro), i * 300);
     });
   }
 }

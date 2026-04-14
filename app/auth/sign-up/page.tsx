@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import Link from 'next/link'
 import { useState, useTransition, useEffect } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { Mail, Lock, KeyRound, ArrowRight, AlertCircle, CheckCircle2, Sparkles, User } from 'lucide-react'
+import { Mail, Lock, KeyRound, ArrowRight, AlertCircle, CheckCircle2, Sparkles, User, ShieldCheck } from 'lucide-react'
 import { validateEmail } from '@/lib/email-validator'
 
 export default function SignUpPage() {
@@ -344,6 +344,35 @@ export default function SignUpPage() {
                       </motion.div>
                     )}
                   </AnimatePresence>
+
+                  {/* Legal consent */}
+                  <motion.p
+                    initial={false}
+                    animate={mounted ? { opacity: 1 } : { opacity: 0 }}
+                    transition={{ delay: 0.35, duration: 0.35 }}
+                    className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 px-3.5 py-3 text-xs text-muted-foreground"
+                  >
+                    <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                    <span>
+                      By creating an account, you agree to our{' '}
+                      <Link
+                        href="/terms"
+                        target="_blank"
+                        className="font-semibold text-foreground underline-offset-4 hover:underline hover:text-primary transition-colors"
+                      >
+                        Terms of Service
+                      </Link>{' '}
+                      and{' '}
+                      <Link
+                        href="/privacy"
+                        target="_blank"
+                        className="font-semibold text-foreground underline-offset-4 hover:underline hover:text-primary transition-colors"
+                      >
+                        Privacy Policy
+                      </Link>
+                      .
+                    </span>
+                  </motion.p>
 
                   {/* Submit */}
                   <motion.div

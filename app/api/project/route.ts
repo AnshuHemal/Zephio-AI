@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   convertModelMessages,
   generateProjectTitle,
+  savePageVersionAction,
 } from "@/app/action/action";
 import { getAuthServer } from "@/lib/insforge-server";
 import {
@@ -426,6 +427,10 @@ async function runRegenerateWorker({
   const match = htmlContent.match(/<div[\s\S]*<\/div>/);
   htmlContent = match ? match[0] : htmlContent;
   htmlContent = htmlContent.replace(/```/g, "");
+
+  // ── Save current page state as a version before overwriting ─────────────
+  await savePageVersionAction(selectedPage.id).catch(() => {});
+  // ────────────────────────────────────────────────────────────────────────
 
   const { data: updatedPage, error } = await insforge.database
     .from("pages")

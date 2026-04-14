@@ -142,9 +142,17 @@ export default function SignInPage() {
               transition={{ delay: 0.25, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
               className="space-y-2"
             >
-              <label htmlFor="password" className="text-sm font-semibold text-foreground">
-                Password
-              </label>
+              <div className="flex items-center justify-between">
+                <label htmlFor="password" className="text-sm font-semibold text-foreground">
+                  Password
+                </label>
+                <Link
+                  href="/auth/forgot-password"
+                  className="text-xs font-medium text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <div className="relative">
                 <Lock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
