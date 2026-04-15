@@ -161,3 +161,73 @@ CREATE INDEX IF NOT EXISTS idx_projects_folder_id ON projects ("folderId");
 - `recolorFolderAction(folderId, color)`
 - `deleteFolderAction(folderId)`
 - `moveProjectToFolderAction(projectId, folderId | null)`
+
+## Page Templates Library — Required DB Migration
+
+Run this in the Insforge SQL editor to enable user-saved templates:
+
+```sql
+CREATE TABLE IF NOT EXISTS user_templates (
+  id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  "userId"      UUID        REFERENCES auth.users(id) ON DELETE CASCADE,
+  name          TEXT        NOT NULL,
+  description   TEXT        NOT NULL DEFAULT '',
+  prompt        TEXT        NOT NULL DEFAULT '',
+  "htmlContent" TEXT        NOT NULL,
+  "rootStyles"  TEXT        NOT NULL DEFAULT '',
+  "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Index for fast per-user lookups
+CREATE INDEX IF NOT EXISTS idx_user_templates_user_id ON user_templates ("userId");
+```
+
+### Templates API Routes
+- `GET /api/templates` — list all saved templates for the current user (newest first)
+- `POST /api/templates` — save a page as a template `{ name, description?, prompt, htmlContent, rootStyles }`
+- `DELETE /api/templates/[templateId]` — delete a saved template
+
+### How it works
+1. In any project, hover a page in the sidebar and click the **bookmark** icon (Save as template)
+2. Give it a name, optional description, and an optional prompt hint
+3. On the `/new` page, switch to the **My Templates** tab to see all saved templates
+4. Click any template to load its prompt into the chat input and start a new project
+
+## Preview Comments — Required DB Migration
+
+Run this in the Insforge SQL editor to enable the comment-on-preview feature:
+
+```sql
+CREATE TABLE IF NOT EXISTS page_comments (
+  id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  "slugId"     TEXT        NOT NULL,
+  "pageId"     TEXT        NOT NULL,
+  "authorName" TEXT        NOT NULL DEFAULT 'Anonymous',
+  text         TEXT        NOT NULL,
+  "xPct"       NUMERIC(6,3) NOT NULL DEFAULT 0,
+  "yPct"       NUMERIC(6,3) NOT NULL DEFAULT 0,
+  resolved     BOOLEAN     NOT NULL DEFAULT false,
+  "createdAt"  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Fast lookups by preview slug
+CREATE INDEX IF NOT EXISTS idx_page_comments_slug_id
+  ON page_comments ("slugId");
+
+-- Fast lookups by page
+CREATE INDEX IF NOT EXISTS idx_page_comments_page_id
+  ON page_comments ("pageId");
+```
+
+### Comment API Routes
+- `GET /api/comments/[slugId]` — public, returns all comments for a preview
+- `POST /api/comments/[slugId]` — public, anyone with the link can post `{ pageId, authorName, text, xPct, yPct }`
+- `PATCH /api/comments/[slugId]/[commentId]` — owner only, toggle `{ resolved: boolean }`
+- `DELETE /api/comments/[slugId]/[commentId]` — owner only, delete a comment
+
+### How it works
+1. Share a preview link with a client
+2. Client opens the link, clicks **Comment** button (or presses **F**) to enter comment mode
+3. Client clicks anywhere on the page to drop a pin and type their feedback
+4. Owner opens the same link, sees all pins, can **Resolve** or **Delete** each one
+5. The **All comments** panel shows open vs resolved comments grouped by page

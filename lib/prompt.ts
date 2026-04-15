@@ -156,7 +156,7 @@ Example:
   "pages": [
     {
       "id": "landing-page" ,
-      "name": "Landing Page",
+      "name": "Hero & Features",
       "purpose": "Main marketing page",
       "rootStyles": "--background: #ffffff; --foreground: #0f172a; --primary: #6366f1; --primary-rgb: 99, 102, 241;",
       "visualDescription": "Root: bg-[var(--background)] with radial-gradient light-leak..."
@@ -168,6 +168,7 @@ FOR REGENERATE — same shape, exactly 1 page in the array.
 
 Rules:
 - pageID must be unique.
+- "name" must be a SHORT, DESCRIPTIVE section name (1-3 words). Examples: "Hero", "Pricing", "Contact Form", "Features", "About Us", "FAQ", "Testimonials", "Dashboard", "Login", "Sign Up", "Portfolio", "Team", "Services". NOT generic names like "Page 1" or "Landing Page".
 - "pages" must always exist and contain at least one item.
 - Maximum 3 pages.
 - Never return alternative shapes.

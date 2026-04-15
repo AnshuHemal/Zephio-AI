@@ -1,17 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { getHTMLWrapper } from "@/lib/page-wrapper";
 import { PageType } from "@/types/project";
+import { PageComment } from "@/types/comments";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 import { downloadPage, downloadAllPages } from "@/lib/export";
-import { Download, ExternalLink, ChevronLeft, ChevronRight, Link2, Check } from "lucide-react";
+import {
+  Download,
+  ExternalLink,
+  ChevronLeft,
+  ChevronRight,
+  Link2,
+  Check,
+  MessageCircle,
+  X,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { toast } from "sonner";
+import CommentOverlay from "@/components/preview/comment-overlay";
+import CommentPanel from "@/components/preview/comment-panel";
 
 type PreviewData = {
   title: string;
@@ -27,6 +39,14 @@ export default function PreviewClient({ slugId }: { slugId: string }) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
 
+  // ── Comment state ──────────────────────────────────────────────────────────
+  const [comments, setComments] = useState<PageComment[]>([]);
+  const [commentMode, setCommentMode] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
+  // isOwner: true when the viewer is the project owner (has edit access)
+  const [isOwner, setIsOwner] = useState(false);
+
+  // ── Load project data ──────────────────────────────────────────────────────
   useEffect(() => {
     fetch(`/api/preview/${slugId}`)
       .then((r) => {
@@ -38,33 +58,47 @@ export default function PreviewClient({ slugId }: { slugId: string }) {
       .finally(() => setLoading(false));
   }, [slugId]);
 
-  // Keyboard shortcuts for navigation
+  // ── Load comments ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    fetch(`/api/comments/${slugId}`)
+      .then((r) => r.ok ? r.json() : { comments: [] })
+      .then((d) => setComments(d.comments ?? []))
+      .catch(() => {});
+  }, [slugId]);
+
+  // ── Check ownership (best-effort — no auth required for preview) ───────────
+  useEffect(() => {
+    fetch(`/api/project/${slugId}`)
+      .then((r) => r.ok ? setIsOwner(true) : null)
+      .catch(() => {});
+  }, [slugId]);
+
+  // ── Keyboard shortcuts ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!data) return;
-    
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Arrow keys for page navigation
+      const target = e.target as HTMLElement;
+      const isTyping = target.tagName === "INPUT" || target.tagName === "TEXTAREA";
+
       if (e.key === "ArrowLeft" && activeIndex > 0) {
         setActiveIndex((i) => i - 1);
       } else if (e.key === "ArrowRight" && activeIndex < data.pages.length - 1) {
         setActiveIndex((i) => i + 1);
-      }
-      // C key to copy link
-      else if (e.key === "c" && !e.metaKey && !e.ctrlKey) {
-        const target = e.target as HTMLElement;
-        // Don't trigger if user is typing in an input
-        if (target.tagName !== "INPUT" && target.tagName !== "TEXTAREA") {
-          handleCopyLink();
-        }
+      } else if (e.key === "c" && !e.metaKey && !e.ctrlKey && !isTyping) {
+        handleCopyLink();
+      } else if (e.key === "f" && !e.metaKey && !e.ctrlKey && !isTyping) {
+        setCommentMode((v) => !v);
+      } else if (e.key === "Escape") {
+        setCommentMode(false);
       }
     };
-
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [data, activeIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const activePage = data?.pages[activeIndex];
 
+  // ── Handlers ───────────────────────────────────────────────────────────────
   const handleDownloadAll = async () => {
     if (!data) return;
     setIsDownloading(true);
@@ -73,17 +107,99 @@ export default function PreviewClient({ slugId }: { slugId: string }) {
   };
 
   const handleCopyLink = async () => {
-    const url = window.location.href;
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(window.location.href);
       setLinkCopied(true);
       toast.success("Link copied to clipboard!");
       setTimeout(() => setLinkCopied(false), 2000);
-    } catch (err) {
+    } catch {
       toast.error("Failed to copy link");
     }
   };
 
+  const handleAddComment = useCallback(
+    async (xPct: number, yPct: number, authorName: string, text: string) => {
+      if (!activePage) return;
+      try {
+        const res = await fetch(`/api/comments/${slugId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pageId: activePage.id,
+            authorName,
+            text,
+            xPct,
+            yPct,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          toast.error(data.error ?? "Failed to post comment.");
+          return;
+        }
+        setComments((prev) => [...prev, data.comment]);
+        toast.success("Comment added!");
+      } catch {
+        toast.error("Something went wrong.");
+      }
+    },
+    [activePage, slugId]
+  );
+
+  const handleResolve = useCallback(
+    async (id: string, resolved: boolean) => {
+      // Optimistic update
+      setComments((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, resolved } : c))
+      );
+      try {
+        const res = await fetch(`/api/comments/${slugId}/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resolved }),
+        });
+        if (!res.ok) {
+          // Revert
+          setComments((prev) =>
+            prev.map((c) => (c.id === id ? { ...c, resolved: !resolved } : c))
+          );
+          toast.error("Failed to update comment.");
+        }
+      } catch {
+        setComments((prev) =>
+          prev.map((c) => (c.id === id ? { ...c, resolved: !resolved } : c))
+        );
+      }
+    },
+    [slugId]
+  );
+
+  const handleDelete = useCallback(
+    async (id: string) => {
+      const prev = comments.find((c) => c.id === id);
+      setComments((c) => c.filter((x) => x.id !== id));
+      try {
+        const res = await fetch(`/api/comments/${slugId}/${id}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) {
+          if (prev) setComments((c) => [...c, prev]);
+          toast.error("Failed to delete comment.");
+        } else {
+          toast.success("Comment deleted.");
+        }
+      } catch {
+        if (prev) setComments((c) => [...c, prev]);
+      }
+    },
+    [comments, slugId]
+  );
+
+  const openCommentCount = activePage
+    ? comments.filter((c) => c.pageId === activePage.id && !c.resolved).length
+    : 0;
+
+  // ── Loading / error states ─────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
@@ -99,7 +215,9 @@ export default function PreviewClient({ slugId }: { slugId: string }) {
     return (
       <div className="flex h-screen flex-col items-center justify-center gap-4 bg-background">
         <p className="text-lg font-semibold text-foreground">Project not found</p>
-        <p className="text-sm text-muted-foreground">This preview link may be invalid or expired.</p>
+        <p className="text-sm text-muted-foreground">
+          This preview link may be invalid or expired.
+        </p>
         <Button asChild>
           <Link href="/">Go to Zephio</Link>
         </Button>
@@ -109,7 +227,7 @@ export default function PreviewClient({ slugId }: { slugId: string }) {
 
   return (
     <div className="flex h-screen flex-col bg-background overflow-hidden">
-      {/* Top bar */}
+      {/* ── Top bar ─────────────────────────────────────────────────────────── */}
       <motion.header
         initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -145,7 +263,46 @@ export default function PreviewClient({ slugId }: { slugId: string }) {
         )}
 
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          {/* Copy Link Button - Prominent placement */}
+          {/* Comment mode toggle */}
+          <Button
+            variant={commentMode ? "default" : "outline"}
+            size="sm"
+            className={cn(
+              "gap-1.5 text-xs font-semibold relative",
+              commentMode && "ring-2 ring-primary/30"
+            )}
+            onClick={() => {
+              setCommentMode((v) => !v);
+              if (!panelOpen) setPanelOpen(true);
+            }}
+            title="Toggle comment mode (F)"
+          >
+            <MessageCircle className="size-3.5" />
+            <span className="hidden sm:inline">
+              {commentMode ? "Commenting…" : "Comment"}
+            </span>
+            {openCommentCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
+                {openCommentCount}
+              </span>
+            )}
+          </Button>
+
+          {/* Panel toggle */}
+          <Button
+            variant={panelOpen ? "secondary" : "outline"}
+            size="sm"
+            className="gap-1.5 text-xs hidden sm:flex"
+            onClick={() => setPanelOpen((v) => !v)}
+            title="Toggle comments panel"
+          >
+            {panelOpen ? <X className="size-3.5" /> : <MessageCircle className="size-3.5" />}
+            <span className="hidden lg:inline">
+              {panelOpen ? "Hide panel" : "All comments"}
+            </span>
+          </Button>
+
+          {/* Copy link */}
           <Button
             variant="default"
             size="sm"
@@ -175,8 +332,9 @@ export default function PreviewClient({ slugId }: { slugId: string }) {
                 </motion.div>
               )}
             </AnimatePresence>
-            <span className="hidden xs:inline">{linkCopied ? "Copied!" : "Copy link"}</span>
-            <span className="xs:hidden">{linkCopied ? "✓" : "Share"}</span>
+            <span className="hidden xs:inline">
+              {linkCopied ? "Copied!" : "Copy link"}
+            </span>
           </Button>
 
           {activePage && (
@@ -187,7 +345,7 @@ export default function PreviewClient({ slugId }: { slugId: string }) {
               onClick={() => downloadPage(activePage)}
             >
               <Download className="size-3.5" />
-              <span>Download page</span>
+              Download page
             </Button>
           )}
           <Button
@@ -197,116 +355,162 @@ export default function PreviewClient({ slugId }: { slugId: string }) {
             onClick={handleDownloadAll}
             disabled={isDownloading}
           >
-            {isDownloading ? (
-              <Spinner className="size-3.5" />
-            ) : (
-              <Download className="size-3.5" />
-            )}
+            {isDownloading ? <Spinner className="size-3.5" /> : <Download className="size-3.5" />}
             <span className="hidden sm:inline">
               {isDownloading ? "Preparing…" : "Export"}
             </span>
           </Button>
-          <Button variant="ghost" size="sm" asChild className="gap-1.5 text-xs hidden md:flex">
-            <Link href={`/project/${slugId}`}>
-              <ExternalLink className="size-3.5" />
-              <span>Edit</span>
-            </Link>
-          </Button>
+          {isOwner && (
+            <Button variant="ghost" size="sm" asChild className="gap-1.5 text-xs hidden md:flex">
+              <Link href={`/project/${slugId}`}>
+                <ExternalLink className="size-3.5" />
+                Edit
+              </Link>
+            </Button>
+          )}
         </div>
       </motion.header>
 
-      {/* Preview area */}
-      <div className="relative flex-1 overflow-hidden bg-muted/30">
-        {/* Mobile page selector */}
-        {data.pages.length > 1 && (
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.3 }}
-            className="absolute top-3 left-1/2 -translate-x-1/2 z-10 md:hidden"
-          >
-            <div className="flex items-center gap-1 rounded-lg border border-border bg-background/90 backdrop-blur-md p-1 shadow-lg">
-              {data.pages.map((page, i) => (
-                <button
-                  key={page.id}
-                  onClick={() => setActiveIndex(i)}
-                  className={cn(
-                    "rounded-md px-2.5 py-1 text-xs font-medium transition-all duration-200",
-                    i === activeIndex
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                  )}
-                >
-                  {page.name}
-                </button>
-              ))}
-            </div>
-          </motion.div>
-        )}
+      {/* ── Main area ───────────────────────────────────────────────────────── */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Preview + overlay */}
+        <div className="relative flex-1 overflow-hidden bg-muted/30">
+          {/* Comment mode banner */}
+          <AnimatePresence>
+            {commentMode && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+                className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 text-xs font-medium text-primary backdrop-blur-sm shadow-lg"
+              >
+                <MessageCircle className="size-3.5" />
+                Click anywhere to leave a comment · Press{" "}
+                <kbd className="rounded bg-primary/20 px-1 py-0.5 font-mono text-[10px]">Esc</kbd>{" "}
+                to exit
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-        <AnimatePresence mode="wait">
-          {activePage && (
+          {/* Mobile page selector */}
+          {data.pages.length > 1 && (
             <motion.div
-              key={activePage.id}
-              initial={{ opacity: 0, scale: 0.99 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.99 }}
-              transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-              className="h-full w-full"
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.3 }}
+              className="absolute top-3 left-1/2 -translate-x-1/2 z-10 md:hidden"
             >
-              <iframe
-                srcDoc={getHTMLWrapper(
-                  activePage.htmlContent,
-                  activePage.name,
-                  activePage.rootStyles,
-                  activePage.id
-                )}
-                title={activePage.name}
-                sandbox="allow-scripts"
-                className="h-full w-full border-none"
-              />
+              <div className="flex items-center gap-1 rounded-lg border border-border bg-background/90 backdrop-blur-md p-1 shadow-lg">
+                {data.pages.map((page, i) => (
+                  <button
+                    key={page.id}
+                    onClick={() => setActiveIndex(i)}
+                    className={cn(
+                      "rounded-md px-2.5 py-1 text-xs font-medium transition-all duration-200",
+                      i === activeIndex
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                    )}
+                  >
+                    {page.name}
+                  </button>
+                ))}
+              </div>
             </motion.div>
           )}
-        </AnimatePresence>
 
-        {/* Prev / Next arrows for multi-page */}
-        {data.pages.length > 1 && (
-          <>
-            <motion.button
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3, duration: 0.3 }}
-              onClick={() => setActiveIndex((i) => Math.max(0, i - 1))}
-              disabled={activeIndex === 0}
-              className={cn(
-                "absolute left-3 top-1/2 -translate-y-1/2 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background/90 backdrop-blur shadow-lg transition-all",
-                activeIndex === 0 
-                  ? "opacity-30 cursor-not-allowed" 
-                  : "hover:bg-accent hover:scale-110 cursor-pointer active:scale-95"
-              )}
-            >
-              <ChevronLeft className="size-5" />
-            </motion.button>
-            <motion.button
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3, duration: 0.3 }}
-              onClick={() => setActiveIndex((i) => Math.min(data.pages.length - 1, i + 1))}
-              disabled={activeIndex === data.pages.length - 1}
-              className={cn(
-                "absolute right-3 top-1/2 -translate-y-1/2 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background/90 backdrop-blur shadow-lg transition-all",
-                activeIndex === data.pages.length - 1 
-                  ? "opacity-30 cursor-not-allowed" 
-                  : "hover:bg-accent hover:scale-110 cursor-pointer active:scale-95"
-              )}
-            >
-              <ChevronRight className="size-5" />
-            </motion.button>
-          </>
-        )}
+          <AnimatePresence mode="wait">
+            {activePage && (
+              <motion.div
+                key={activePage.id}
+                initial={{ opacity: 0, scale: 0.99 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.99 }}
+                transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                className="h-full w-full"
+              >
+                <CommentOverlay
+                  comments={comments}
+                  activePageId={activePage.id}
+                  commentMode={commentMode}
+                  isOwner={isOwner}
+                  onAddComment={handleAddComment}
+                  onResolve={handleResolve}
+                  onDelete={handleDelete}
+                >
+                  <iframe
+                    srcDoc={getHTMLWrapper(
+                      activePage.htmlContent,
+                      activePage.name,
+                      activePage.rootStyles,
+                      activePage.id
+                    )}
+                    title={activePage.name}
+                    sandbox="allow-scripts"
+                    className="h-full w-full border-none"
+                  />
+                </CommentOverlay>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Prev / Next arrows */}
+          {data.pages.length > 1 && (
+            <>
+              <motion.button
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3, duration: 0.3 }}
+                onClick={() => setActiveIndex((i) => Math.max(0, i - 1))}
+                disabled={activeIndex === 0}
+                className={cn(
+                  "absolute left-3 top-1/2 -translate-y-1/2 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background/90 backdrop-blur shadow-lg transition-all",
+                  activeIndex === 0
+                    ? "opacity-30 cursor-not-allowed"
+                    : "hover:bg-accent hover:scale-110 cursor-pointer active:scale-95"
+                )}
+              >
+                <ChevronLeft className="size-5" />
+              </motion.button>
+              <motion.button
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3, duration: 0.3 }}
+                onClick={() =>
+                  setActiveIndex((i) => Math.min(data.pages.length - 1, i + 1))
+                }
+                disabled={activeIndex === data.pages.length - 1}
+                className={cn(
+                  "absolute right-3 top-1/2 -translate-y-1/2 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background/90 backdrop-blur shadow-lg transition-all",
+                  activeIndex === data.pages.length - 1
+                    ? "opacity-30 cursor-not-allowed"
+                    : "hover:bg-accent hover:scale-110 cursor-pointer active:scale-95"
+                )}
+              >
+                <ChevronRight className="size-5" />
+              </motion.button>
+            </>
+          )}
+        </div>
+
+        {/* Comment panel */}
+        <AnimatePresence>
+          {panelOpen && activePage && (
+            <CommentPanel
+              key="panel"
+              comments={comments}
+              activePageId={activePage.id}
+              isOwner={isOwner}
+              onResolve={handleResolve}
+              onDelete={handleDelete}
+              onClose={() => setPanelOpen(false)}
+            />
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* Footer */}
+      {/* ── Footer ──────────────────────────────────────────────────────────── */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -315,16 +519,24 @@ export default function PreviewClient({ slugId }: { slugId: string }) {
       >
         <p className="text-xs text-muted-foreground">
           Built with{" "}
-          <Link href="/" className="font-medium text-foreground hover:text-primary transition-colors">
+          <Link
+            href="/"
+            className="font-medium text-foreground hover:text-primary transition-colors"
+          >
             Zephio
           </Link>{" "}
           — AI that designs. You that decides.
         </p>
         <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
           <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border font-mono text-[10px]">
+            F
+          </kbd>
+          <span>comment mode</span>
+          <span className="mx-1">•</span>
+          <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border font-mono text-[10px]">
             C
           </kbd>
-          <span>to copy link</span>
+          <span>copy link</span>
           {data.pages.length > 1 && (
             <>
               <span className="mx-1">•</span>
@@ -334,7 +546,7 @@ export default function PreviewClient({ slugId }: { slugId: string }) {
               <kbd className="px-1.5 py-0.5 rounded bg-muted border border-border font-mono text-[10px]">
                 →
               </kbd>
-              <span>to navigate</span>
+              <span>navigate</span>
             </>
           )}
         </div>

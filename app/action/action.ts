@@ -32,6 +32,45 @@ export const generateProjectTitle = async (message: string) => {
   }
 }
 
+/**
+ * Generates a short, descriptive page name from its HTML content.
+ * Uses the fast model — fires quickly and non-blocking.
+ * Returns a 1-3 word name like "Hero", "Pricing", "Contact Form".
+ */
+export const generatePageNameFromHtml = async (htmlSnippet: string): Promise<string> => {
+  try {
+    const { insforge } = await getAuthServer();
+    // Only send the first 2000 chars — enough to identify the section type
+    const snippet = htmlSnippet.slice(0, 2000);
+    const result = await insforge.ai.chat.completions.create({
+      model: "google/gemini-2.5-flash-lite",
+      messages: [
+        {
+          role: "system",
+          content: `You are a web page section identifier. Given HTML, return a short 1-3 word name for the page section.
+Rules:
+- Return ONLY the name. No punctuation. No explanation.
+- Use title case (e.g. "Hero Section", "Pricing", "Contact Form", "Features", "About Us", "FAQ", "Testimonials", "Footer", "Dashboard", "Login", "Sign Up", "Blog", "Portfolio", "Team", "Services").
+- Be specific — "Pricing Table" is better than "Page".
+- Max 3 words.`,
+        },
+        {
+          role: "user",
+          content: `Identify this page section:\n${snippet}`,
+        },
+      ],
+    });
+    const name = result.choices[0].message.content?.trim() ?? "";
+    // Validate: must be 1-5 words, no special chars
+    if (name && name.split(" ").length <= 5 && /^[A-Za-z0-9 ]+$/.test(name)) {
+      return name;
+    }
+    return "";
+  } catch {
+    return "";
+  }
+};
+
 
 export const convertModelMessages = async (messages: UIMessage[]) => {
   const modelMessages = messages.map((message: UIMessage) => {

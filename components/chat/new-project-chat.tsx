@@ -9,8 +9,9 @@ import { PromptInputMessage } from "../ai-elements/prompt-input";
 import ChatInput from "./chat-input";
 import OnboardingTour from "@/components/onboarding/onboarding-tour";
 import TemplateGallery from "@/components/onboarding/template-gallery";
+import UserTemplateGallery from "@/components/onboarding/user-template-gallery";
 import { isTourCompleted, isFirstVisit } from "@/lib/onboarding";
-import { Sparkles, LayoutGrid, HelpCircle, Clock } from "lucide-react";
+import { Sparkles, LayoutGrid, HelpCircle, Clock, BookmarkPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "@/lib/date-utils";
 
@@ -54,7 +55,7 @@ const QUICK_PROMPTS = [
   },
 ];
 
-type Tab = "prompts" | "templates";
+type Tab = "prompts" | "templates" | "my-templates";
 
 type PropsType = {
   input: string;
@@ -166,6 +167,12 @@ const NewProjectChat = ({
                   icon={<LayoutGrid className="size-3.5" />}
                   label="Templates"
                 />
+                <TabButton
+                  active={activeTab === "my-templates"}
+                  onClick={() => setActiveTab("my-templates")}
+                  icon={<BookmarkPlus className="size-3.5" />}
+                  label="My Templates"
+                />
               </div>
 
               {/* Tour trigger */}
@@ -189,7 +196,7 @@ const NewProjectChat = ({
                 >
                   <QuickPrompts onSelect={handlePromptSelect} />
                 </motion.div>
-              ) : (
+              ) : activeTab === "templates" ? (
                 <motion.div
                   key="templates"
                   initial={{ opacity: 0, y: 8 }}
@@ -198,6 +205,16 @@ const NewProjectChat = ({
                   transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
                 >
                   <TemplateGallery onSelect={handleTemplateSelect} />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="my-templates"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <UserTemplateGallery onSelect={handleTemplateSelect} />
                 </motion.div>
               )}
             </AnimatePresence>

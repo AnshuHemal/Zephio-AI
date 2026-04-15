@@ -4,7 +4,7 @@ import React, { useRef, useState, useEffect } from "react";
 import { motion, AnimatePresence, Reorder } from "motion/react";
 import { PageType } from "@/types/project";
 import { cn } from "@/lib/utils";
-import { GripVertical, Trash2, Download, Pencil, Check, X, History, Copy, Plus, Wand2, FileText, Code2, Braces } from "lucide-react";
+import { GripVertical, Trash2, Download, Pencil, Check, X, History, Copy, Plus, Wand2, FileText, Code2, Braces, BookmarkPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { downloadPage } from "@/lib/export";
@@ -14,6 +14,7 @@ import { getHTMLWrapper } from "@/lib/page-wrapper";
 import { toast } from "sonner";
 import PageVersionDrawer from "./page-version-drawer";
 import PagePreviewTooltip from "./page-preview-tooltip";
+import SaveTemplateDialog from "./save-template-dialog";
 import {
   Tooltip,
   TooltipContent,
@@ -66,6 +67,7 @@ export default function PageSidebar({
   const [addPopoverOpen, setAddPopoverOpen] = useState(false);
   const [copiedHtmlId, setCopiedHtmlId] = useState<string | null>(null);
   const [copiedCssId, setCopiedCssId] = useState<string | null>(null);
+  const [saveTemplatePageId, setSaveTemplatePageId] = useState<string | null>(null);
 
   const handleCopyHtml = (e: React.MouseEvent, page: PageType) => {
     e.stopPropagation();
@@ -345,6 +347,24 @@ export default function PageSidebar({
                         <Button
                           size="icon"
                           variant="ghost"
+                          className="size-6 shrink-0 text-muted-foreground hover:text-primary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSaveTemplatePageId(page.id);
+                          }}
+                          disabled={page.isLoading || !page.htmlContent}
+                        >
+                          <BookmarkPlus className="size-3" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right">Save as template</TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="icon"
+                          variant="ghost"
                           className="size-6 shrink-0 text-muted-foreground hover:text-foreground"
                           onClick={(e) => handleCopyCss(e, page)}
                           disabled={page.isLoading}
@@ -497,6 +517,18 @@ export default function PageSidebar({
           setHistoryPageId(null);
         }}
       />
+
+      {/* Save as template dialog */}
+      {saveTemplatePageId && (() => {
+        const templatePage = pages.find(p => p.id === saveTemplatePageId);
+        return templatePage ? (
+          <SaveTemplateDialog
+            page={templatePage}
+            open={!!saveTemplatePageId}
+            onClose={() => setSaveTemplatePageId(null)}
+          />
+        ) : null;
+      })()}
     </div>
   );
 }

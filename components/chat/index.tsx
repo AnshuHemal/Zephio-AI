@@ -187,6 +187,17 @@ const ChatInterface = ({
           setCreditsRefreshKey(k => k + 1);
           break;
         }
+
+        case "data-page-renamed": {
+          // AI auto-named a page — update it in local state
+          const { pageId, name } = data;
+          if (pageId && name) {
+            setPages(prev =>
+              prev.map(p => p.id === pageId ? { ...p, name } : p)
+            );
+          }
+          break;
+        }
       }
     },
     onError: (error) => {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   convertModelMessages,
   generateProjectTitle,
+  generatePageNameFromHtml,
   savePageVersionAction,
 } from "@/app/action/action";
 import { getAuthServer } from "@/lib/insforge-server";
@@ -228,6 +229,20 @@ ${page.rootStyles}
 
     if (error) console.log(error, "Page failed to save");
 
+    // ── Auto-name the page from its HTML content (fire-and-forget) ──────
+    generatePageNameFromHtml(htmlContent).then(async (aiName) => {
+      if (aiName && aiName !== page.name) {
+        await insforge.database
+          .from("pages")
+          .update({ name: aiName })
+          .eq("id", savedPage.id)
+          .catch(() => {});
+        // Emit the new name so the client sidebar updates immediately
+        emit(writer, "page-renamed", { pageId: savedPage.id, name: aiName }, { transient: true });
+      }
+    }).catch(() => {});
+    // ────────────────────────────────────────────────────────────────────
+
     generationPages.push({
       name: page.name,
       htmlContent: htmlContent,
@@ -446,6 +461,24 @@ async function runRegenerateWorker({
   if (error) {
     console.log(error, "Failed to update selected Page");
   }
+
+  // ── Auto-name blank pages after they get content (fire-and-forget) ───
+  // Only rename if the current name looks like a default ("Page 1", "New Page", etc.)
+  const isDefaultName = /^(page\s*\d+|new page|untitled)$/i.test(selectedPage.name.trim());
+  if (isDefaultName) {
+    generatePageNameFromHtml(htmlContent).then(async (aiName) => {
+      if (aiName) {
+        await insforge.database
+          .from("pages")
+          .update({ name: aiName })
+          .eq("id", updatedPage.id)
+          .catch(() => {});
+        // Emit the new name so the client sidebar updates immediately
+        emit(writer, "page-renamed", { pageId: updatedPage.id, name: aiName }, { transient: true });
+      }
+    }).catch(() => {});
+  }
+  // ────────────────────────────────────────────────────────────────────
 
   emit(
     writer,
