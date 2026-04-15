@@ -1,69 +1,102 @@
-What Zephio Has Now
-You've shipped a genuinely solid product: AI generation, multi-page canvas, version history, export, sharing, folders, keyboard shortcuts, onboarding, Stripe payments, analytics, error tracking, and a polished dashboard. That's a lot.
+This is a prompt engineering problem, not a code architecture problem. The quality of generated pages lives entirely in 
+prompt.ts
+ — specifically WEB_GENERATION_PROMPT and WEB_ANALYSIS_PROMPT. Let me read them first before giving you guidance.
 
-What Would Actually Move the Needle
-🔴 High Impact — Users Will Notice Immediately
-1. Real-time Collaboration / Share to Edit
+Searched workspace
+Find the prompt file
+Read file(s)
 
-Right now sharing gives a read-only preview link. The next obvious step is letting someone with the link leave comments or suggestions. Even a simple "comment on a page" feature — where a reviewer can click anywhere on the preview and leave a sticky note — would make Zephio useful for client work. Designers send mockups to clients. Clients need to give feedback. Right now they have to email or message separately. This closes that loop entirely and is a strong reason to upgrade to Pro/Team.
+prompt.ts
+Now I have the full picture. Here's detailed, honest guidance:
 
-2. Custom Domain for Preview Links
+The Real Problem: Two Separate Issues
+Issue 1 — Page Quality (Prompt Engineering)
+Your WEB_GENERATION_PROMPT is already very strong — it has height rules, chart blueprints, variable mapping, and layout guidance. The quality problem is not the prompt structure, it's what the AI model is being asked to do in a single pass. Here's what's actually happening and how to fix it:
 
-Right now preview links look like yourapp.com/preview/abc123. Letting Pro users set a custom subdomain like client-name.yourapp.com makes the preview feel professional when sent to clients. It's a vanity feature but it signals quality and is a real differentiator for agencies.
+Root cause: The analysis step and generation step are disconnected
 
-3. AI Chat with Context — "Edit this section"
+The WEB_ANALYSIS_PROMPT produces a visualDescription string, but the generation model receives it as plain text and has to interpret it. The description is often too abstract ("bento grid with glassmorphism") and the generator fills in the gaps with generic choices.
 
-Right now the AI regenerates entire pages. Users want surgical edits: "make the hero text bigger", "change the CTA button color to match the primary", "add a testimonials section below the features". The current flow forces a full regenerate. A "select a section and describe the change" interaction — where the user can click on a part of the page in the canvas and describe what to change — would dramatically improve the editing experience. This is the single most-requested feature type in AI design tools.
+What to improve in WEB_ANALYSIS_PROMPT:
 
-4. Page Templates Library (User-Saved)
+Force section-by-section breakdown. Right now visualDescription is a paragraph. Change it to require a structured list: navbar, hero, section_1, section_2, footer — each with exact Tailwind classes, exact content, exact icon names. The more specific the blueprint, the less the generator has to guess.
 
-Users can already use the quick-start prompts. But they can't save their own templates. If a user builds a great landing page structure, they should be able to save it as a template and reuse it across projects. "Save as template" in the page menu, then "Start from my templates" in the new project flow. This builds habit and makes power users feel invested in the product.
+Add a contentPlan field to the JSON output. This should contain real copy — actual headlines, subheadlines, button text, feature names, testimonial names. Right now the generator invents content on the fly, which leads to generic "Lorem Ipsum"-style text even though you've banned it. Pre-generating the content in the analysis step and passing it to the generator eliminates this.
 
-🟡 Medium Impact — Retention and Stickiness
-5. Project Activity / Change Log
+Add a componentLibrary field. List the exact components needed: ["pill-badge", "floating-navbar", "bento-grid-4col", "testimonial-carousel", "pricing-toggle", "footer-4col"]. This gives the generator a checklist to follow rather than improvising.
 
-A simple timeline inside each project showing "Page 1 regenerated", "Page 2 added", "Exported as ZIP" with timestamps. Users who come back after a week want to know what they last did. This is especially useful for agencies managing multiple client projects. It's a lightweight feature that makes the product feel more professional.
+What to improve in WEB_GENERATION_PROMPT:
 
-6. Multi-Language Support for Generated Pages
+Add a "Section Completion Checklist" rule. Tell the model: every section must have a heading, supporting text, a visual element (icon, chart, image, or illustration), and a CTA or link. Sections with only text are not acceptable.
 
-Right now all generated pages are in English. Adding a language selector in the chat input ("Generate this in Spanish / French / German") would open up a huge non-English market with almost no engineering effort — it's just a prompt instruction. The UI is already internationalization-ready.
+Add explicit "density" rules. The current prompt allows the model to generate sparse pages. Add: "Every section must fill its vertical space. No section should have fewer than 3 visual elements. Cards must have icons, labels, values, and trend indicators."
 
-7. Responsive Preview Toggle
+Add a "visual richness" requirement. Explicitly require: gradient overlays on hero sections, at least one SVG illustration or chart per page, hover states on all interactive elements, and a sticky/fixed navbar.
 
-The canvas shows the desktop version. Users need to know how their design looks on mobile. A simple toggle in the page frame toolbar — Desktop / Tablet / Mobile — that resizes the iframe to 375px, 768px, or 1440px would be extremely useful. Designers always check mobile. Right now there's no way to do this without exporting and opening in a browser.
+Strengthen the typography rules. Add specific size scales: H1 must be text-6xl or larger, section headings text-4xl, card titles text-xl. Right now the model often generates small, timid typography.
 
-8. "What's New" / Changelog Notification
+Issue 2 — Scroll Animations and Entry Animations
+This is a completely separate problem from prompt quality, and it's the more impactful one for user perception. Here's the full picture:
 
-You've shipped a lot of features. Users who signed up 2 months ago don't know about version history, CSS export, keyboard shortcuts, or the command palette. A small notification dot on a "What's new" button in the dashboard header that shows a changelog modal would keep existing users engaged and aware. Each entry is a micro-win that reminds them why they're paying.
+Why there are no animations right now:
 
-🟢 Polish — Makes the Product Feel Premium
-9. Smooth Page Transitions in Preview
+Your WEB_GENERATION_PROMPT explicitly says "Never use JavaScript". This is correct for safety (the iframe uses sandbox="allow-scripts" which does allow scripts, but you're being conservative). The problem is that CSS-only animations are limited — you can do entrance animations on load, but not scroll-triggered ones without JavaScript.
 
-The preview page switches between pages with a fade. Adding a proper page transition — like a slide or a cross-fade with the page name briefly shown — would make the preview feel like a real product demo rather than a prototype. When users share previews with clients, this is the first impression.
+The solution: a self-contained animation script injected into every page
 
-10. AI-Powered Page Naming
+The right approach is to add a small, self-contained JavaScript snippet to your 
+page-wrapper.ts
+ (the getHTMLWrapper function). This script runs inside the iframe and handles all animations. You never ask the AI to write JavaScript — you inject it yourself, so it's always consistent and safe.
 
-Right now pages are named "Page 1", "Page 2", etc. When a page is generated, the AI already knows what it contains. Auto-naming pages based on their content ("Hero Section", "Pricing", "Contact") would make the sidebar much more useful, especially for projects with 5+ pages.
+Here's what to inject:
 
-11. Drag to Reorder Pages on Canvas
+1. Scroll-triggered entrance animations via IntersectionObserver
 
-Pages are laid out horizontally on the canvas. Users can reorder them in the sidebar, but they can't drag them on the canvas itself. This is a minor UX gap but power users who work primarily on the canvas would appreciate it.
+Add a <script> block to getHTMLWrapper that:
 
-12. Export to React / Tailwind Components
+Selects all elements with a data-animate attribute (or a specific class like animate-on-scroll)
+Uses IntersectionObserver to add an is-visible class when they enter the viewport
+The CSS for is-visible transitions from opacity: 0; transform: translateY(24px) to opacity: 1; transform: translateY(0)
+Then update WEB_GENERATION_PROMPT to tell the AI: "Add data-animate to every section, card, and feature block. Do not write any JavaScript — the animation system is already injected."
 
-Right now export is HTML. A "Copy as React component" button that wraps the HTML in a functional React component with Tailwind classes would make Zephio useful as a starting point for actual development — not just design. This is a zero-backend feature (pure string transformation) and would appeal strongly to developer users.
+2. Staggered children animations
 
+Add data-animate-stagger to grid containers. The injected script adds a transition-delay of 0ms, 80ms, 160ms, 240ms to each child, creating a cascade effect.
+
+3. Smooth scroll behavior
+
+Add scroll-behavior: smooth to the html element in getHTMLWrapper. This makes all anchor links (href="#") animate smoothly.
+
+4. Parallax on hero sections
+
+A 5-line scroll event listener that moves the hero background at 0.3x scroll speed creates a professional parallax feel with zero complexity.
+
+5. Navbar scroll behavior
+
+A scroll listener that adds a scrolled class to the navbar after 50px, which triggers a CSS transition to add backdrop-blur and reduce opacity — the standard "sticky nav" pattern.
+
+Issue 3 — The Prompt Needs an Animation Section
+Add this block to WEB_GENERATION_PROMPT:
+
+# ANIMATION ATTRIBUTES (REQUIRED)
+- Add data-animate="fade-up" to: every section, every card, every feature block, every testimonial
+- Add data-animate-stagger to: every grid container (features grid, cards grid, team grid)
+- Add data-animate="fade-in" to: hero headlines, hero subtext, hero CTAs (in that order)
+- The animation system is pre-injected — do NOT write any JavaScript
+- Every interactive element needs: transition-all duration-300 ease-out
+- Buttons need: hover:scale-[1.02] active:scale-[0.98]
+- Cards need: hover:-translate-y-1 hover:shadow-lg
 Priority Order
-Priority	Feature	Why
-1	Responsive preview toggle	Every designer needs this, zero backend
-2	AI surgical edits ("edit this section")	Core product improvement
-3	Export to React component	Opens developer market
-4	AI-powered page naming	Small effort, big polish
-5	What's New changelog	Retention, reminds users of value
-6	User-saved templates	Habit building, stickiness
-7	Page comments for sharing	Client workflow, Team plan value
-8	Project activity log	Professional feel
-9	Multi-language generation	Market expansion
-10	Custom preview domains	Agency/Pro differentiation
-The One Thing
-If I had to pick one: Responsive preview toggle. It's a 2-hour implementation, zero backend, and every single user who builds a landing page will use it immediately. It's also the most common complaint about AI design tools — "looks great on desktop but I can't see mobile". Shipping this would generate genuine positive feedback fast.
+Do these in this order for maximum impact:
+
+Inject the animation script into getHTMLWrapper — this is the single highest-impact change. Every existing and future page gets animations immediately, no re-generation needed.
+
+Add data-animate instructions to WEB_GENERATION_PROMPT — new generations will have the right attributes.
+
+Add the contentPlan field to WEB_ANALYSIS_PROMPT — this fixes the generic content problem.
+
+Add the section density rules to WEB_GENERATION_PROMPT — this fixes sparse layouts.
+
+Add the component checklist to WEB_ANALYSIS_PROMPT — this ensures completeness.
+
+The animation injection in page-wrapper.ts is pure code with no AI involvement — it's deterministic, always works, and immediately improves every page in the app. That's where to start.
