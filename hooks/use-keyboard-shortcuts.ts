@@ -1,59 +1,88 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useRef } from "react";
 
 type ShortcutHandler = (e: KeyboardEvent) => void;
 
-interface KeyboardShortcut {
+export interface KeyboardShortcut {
   key: string;
+  /** Requires Cmd (Mac) or Ctrl (Win/Linux) */
   metaKey?: boolean;
-  ctrlKey?: boolean;
   shiftKey?: boolean;
   altKey?: boolean;
   handler: ShortcutHandler;
+  /** Set false to skip e.preventDefault(). Defaults to true when metaKey is set. */
   preventDefault?: boolean;
 }
 
 /**
- * Hook for registering keyboard shortcuts
- * Automatically handles Mac (Cmd) vs Windows/Linux (Ctrl) differences
+ * Registers keyboard shortcuts with stable event listener attachment.
+ * Uses a ref for the shortcuts array so the listener is never re-attached
+ * on re-renders — only the handler logic updates.
  */
 export function useKeyboardShortcuts(shortcuts: KeyboardShortcut[]) {
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      const isMac = navigator.platform.toUpperCase().includes("MAC");
+  const shortcutsRef = useRef(shortcuts);
 
-      for (const shortcut of shortcuts) {
-        const keyMatches = e.key.toLowerCase() === shortcut.key.toLowerCase();
-        
-        // Handle meta/ctrl key (Cmd on Mac, Ctrl on Windows/Linux)
-        const modifierKey = isMac ? e.metaKey : e.ctrlKey;
-        const modifierMatches = shortcut.metaKey ? modifierKey : !modifierKey;
-        
-        const shiftMatches = shortcut.shiftKey ? e.shiftKey : !e.shiftKey;
-        const altMatches = shortcut.altKey ? e.altKey : !e.altKey;
+  // Update the ref inside an effect to satisfy React's rules
+  useEffect(() => {
+    shortcutsRef.current = shortcuts;
+  });
 
-        if (keyMatches && modifierMatches && shiftMatches && altMatches) {
-          if (shortcut.preventDefault !== false) {
-            e.preventDefault();
-          }
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isMac =
+        typeof navigator !== "undefined" &&
+        navigator.platform.toUpperCase().includes("MAC");
+
+      for (const shortcut of shortcutsRef.current) {
+        const keyMatches =
+          e.key.toLowerCase() === shortcut.key.toLowerCase();
+
+        // Cmd on Mac, Ctrl on Win/Linux
+        const modKey = isMac ? e.metaKey : e.ctrlKey;
+
+        // Only check modifier if the shortcut declares it
+        const metaMatches =
+          shortcut.metaKey === undefined
+            ? true                    // shortcut doesn't care about Cmd/Ctrl
+            : shortcut.metaKey
+            ? modKey                  // shortcut requires Cmd/Ctrl
+            : !modKey;                // shortcut requires NO Cmd/Ctrl
+
+        const shiftMatches =
+          shortcut.shiftKey === undefined
+            ? true
+            : shortcut.shiftKey
+            ? e.shiftKey
+            : !e.shiftKey;
+
+        const altMatches =
+          shortcut.altKey === undefined
+            ? true
+            : shortcut.altKey
+            ? e.altKey
+            : !e.altKey;
+
+        if (keyMatches && metaMatches && shiftMatches && altMatches) {
+          // Default: preventDefault when a modifier key is involved
+          const shouldPrevent =
+            shortcut.preventDefault !== false &&
+            (shortcut.metaKey || shortcut.shiftKey || shortcut.altKey);
+          if (shouldPrevent) e.preventDefault();
           shortcut.handler(e);
           break;
         }
       }
-    },
-    [shortcuts]
-  );
+    };
 
-  useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyDown]);
+  }, []); // ← empty deps: listener attached once, shortcutsRef always current
 }
 
 /**
- * Get the display string for a keyboard shortcut
- * Returns platform-appropriate modifier keys (⌘ on Mac, Ctrl on Windows/Linux)
+ * Returns the platform-appropriate display string for a shortcut.
+ * e.g. { key: "Z", metaKey: true, shiftKey: true } → "⌘⇧Z" on Mac, "Ctrl+Shift+Z" on Win
  */
 export function getShortcutDisplay(shortcut: {
   key: string;
@@ -61,20 +90,15 @@ export function getShortcutDisplay(shortcut: {
   shiftKey?: boolean;
   altKey?: boolean;
 }): string {
-  const isMac = typeof navigator !== "undefined" && navigator.platform.toUpperCase().includes("MAC");
+  const isMac =
+    typeof navigator !== "undefined" &&
+    navigator.platform.toUpperCase().includes("MAC");
+
   const parts: string[] = [];
+  if (shortcut.metaKey) parts.push(isMac ? "⌘" : "Ctrl");
+  if (shortcut.shiftKey) parts.push(isMac ? "⇧" : "Shift");
+  if (shortcut.altKey)   parts.push(isMac ? "⌥" : "Alt");
 
-  if (shortcut.metaKey) {
-    parts.push(isMac ? "⌘" : "Ctrl");
-  }
-  if (shortcut.shiftKey) {
-    parts.push(isMac ? "⇧" : "Shift");
-  }
-  if (shortcut.altKey) {
-    parts.push(isMac ? "⌥" : "Alt");
-  }
-
-  // Capitalize single letters, keep special keys as-is
   const key = shortcut.key.length === 1 ? shortcut.key.toUpperCase() : shortcut.key;
   parts.push(key);
 

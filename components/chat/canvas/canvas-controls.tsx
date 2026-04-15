@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { TOOL_MODE_ENUM, ToolModeType } from '@/constants/canvas';
 import { Button } from '@/components/ui/button';
 import { HandIcon, MinusIcon, MousePointer, PlusIcon, Maximize2 } from 'lucide-react';
@@ -27,6 +27,23 @@ const CanvasControls = ({
   toolMode,
   setToolMode,
 }: PropsType) => {
+
+  // V = Select, H = Hand/Pan — only when not typing in an input
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      ) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "v" || e.key === "V") setToolMode(TOOL_MODE_ENUM.SELECT);
+      if (e.key === "h" || e.key === "H") setToolMode(TOOL_MODE_ENUM.HAND);
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [setToolMode]);
 
   return (
     <div

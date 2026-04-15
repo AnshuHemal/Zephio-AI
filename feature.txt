@@ -1,88 +1,69 @@
-What Zephio Needs Next — Prioritized by Impact
-🔴 Critical (Revenue & Retention Blockers)
-1. Stripe Payments
+What Zephio Has Now
+You've shipped a genuinely solid product: AI generation, multi-page canvas, version history, export, sharing, folders, keyboard shortcuts, onboarding, Stripe payments, analytics, error tracking, and a polished dashboard. That's a lot.
 
-This is the single most important thing. You have a complete credits system, upgrade modal, pricing page, and plan tiers — but zero way to actually collect money. The upgrade button goes to /#pricing which does nothing. Every user who hits their 10-generation limit and wants to pay has no path forward. You're actively losing revenue right now.
+What Would Actually Move the Needle
+🔴 High Impact — Users Will Notice Immediately
+1. Real-time Collaboration / Share to Edit
 
-What you need:
+Right now sharing gives a read-only preview link. The next obvious step is letting someone with the link leave comments or suggestions. Even a simple "comment on a page" feature — where a reviewer can click anywhere on the preview and leave a sticky note — would make Zephio useful for client work. Designers send mockups to clients. Clients need to give feedback. Right now they have to email or message separately. This closes that loop entirely and is a strong reason to upgrade to Pro/Team.
 
-POST /api/stripe/checkout — creates a Stripe Checkout session and redirects
-POST /api/stripe/webhook — handles checkout.session.completed, subscription.updated, subscription.deleted — updates user_credits.plan in the DB
-POST /api/stripe/portal — opens the Stripe Customer Portal for billing management
-A real upgrade button that hits the checkout endpoint
-A "Manage billing" link in the dashboard header for Pro users
-stripeCustomerId column on user_credits table to link users to Stripe customers
-Add STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_PRO_MONTHLY to .env
-Without this, everything else is polish on a product that can't make money.
+2. Custom Domain for Preview Links
 
-2. Forgot Password Flow
+Right now preview links look like yourapp.com/preview/abc123. Letting Pro users set a custom subdomain like client-name.yourapp.com makes the preview feel professional when sent to clients. It's a vanity feature but it signals quality and is a real differentiator for agencies.
 
-Right now there's no "Forgot password?" link on the sign-in page. If a user forgets their password, they're locked out forever. This is a silent churn driver — users who can't get back in just leave. It's a 30-minute implementation using Insforge's built-in password reset email flow.
+3. AI Chat with Context — "Edit this section"
 
-3. "Built with Zephio" Watermark on Free Exports
+Right now the AI regenerates entire pages. Users want surgical edits: "make the hero text bigger", "change the CTA button color to match the primary", "add a testimonials section below the features". The current flow forces a full regenerate. A "select a section and describe the change" interaction — where the user can click on a part of the page in the canvas and describe what to change — would dramatically improve the editing experience. This is the single most-requested feature type in AI design tools.
 
-Every free export should have a small, tasteful badge in the footer — "Made with Zephio". Pro users get clean exports. This does two things simultaneously: creates a viral loop where every shared page advertises Zephio, and gives free users a concrete, tangible reason to upgrade. It costs nothing to implement and compounds over time. The export logic is already in 
-export.ts
- — you just inject a small footer div into the HTML wrapper for free plan users.
+4. Page Templates Library (User-Saved)
 
-🟡 High Impact (Retention & Engagement)
-4. Project Folders / Organization
+Users can already use the quick-start prompts. But they can't save their own templates. If a user builds a great landing page structure, they should be able to save it as a template and reuse it across projects. "Save as template" in the page menu, then "Start from my templates" in the new project flow. This builds habit and makes power users feel invested in the product.
 
-Right now all projects are in one flat list. A user who's been using Zephio for 3 months will have 30+ projects with no way to organize them. Adding simple folders (or tags) lets users group projects by client, type, or status. This is a retention feature — organized users feel in control and keep coming back. The dashboard already has search, so the infrastructure is there.
+🟡 Medium Impact — Retention and Stickiness
+5. Project Activity / Change Log
 
-5. Duplicate Page Within a Project
+A simple timeline inside each project showing "Page 1 regenerated", "Page 2 added", "Exported as ZIP" with timestamps. Users who come back after a week want to know what they last did. This is especially useful for agencies managing multiple client projects. It's a lightweight feature that makes the product feel more professional.
 
-Users can duplicate entire projects but can't duplicate a single page within a project. This is a very common workflow — "I like this page, let me make a variation of it." The page sidebar already has rename, delete, download, and history buttons. Adding a duplicate button there is a small addition with high daily-use value.
+6. Multi-Language Support for Generated Pages
 
-6. "Add New Page" Button in the Sidebar
+Right now all generated pages are in English. Adding a language selector in the chat input ("Generate this in Spanish / French / German") would open up a huge non-English market with almost no engineering effort — it's just a prompt instruction. The UI is already internationalization-ready.
 
-Currently users can only add pages by prompting the AI. But sometimes a user wants to manually add a blank page or a page based on an existing one. A simple "+" button at the bottom of the page sidebar that either creates a blank page or prompts the AI to generate one would reduce friction significantly.
+7. Responsive Preview Toggle
 
-7. Project Last-Opened Sorting + "Continue where you left off"
+The canvas shows the desktop version. Users need to know how their design looks on mobile. A simple toggle in the page frame toolbar — Desktop / Tablet / Mobile — that resizes the iframe to 375px, 768px, or 1440px would be extremely useful. Designers always check mobile. Right now there's no way to do this without exporting and opening in a browser.
 
-The dashboard sorts by updatedAt which is good, but there's no visual "resume" affordance. When a user returns to the dashboard, they should see their most recent project highlighted or pinned at the top with a "Continue →" button. This reduces the cognitive load of "which project was I working on?" and improves time-to-canvas on return visits.
+8. "What's New" / Changelog Notification
 
-8. Prompt History / Suggestions
+You've shipped a lot of features. Users who signed up 2 months ago don't know about version history, CSS export, keyboard shortcuts, or the command palette. A small notification dot on a "What's new" button in the dashboard header that shows a changelog modal would keep existing users engaged and aware. Each entry is a micro-win that reminds them why they're paying.
 
-When a user is in the chat input, they have no memory of what they've typed before. Adding a simple dropdown that shows their last 5-10 prompts (stored in localStorage) lets them quickly reuse or iterate on previous prompts. This is especially useful for power users who have a set of prompts they use repeatedly. The chat input already has a popover for style presets — this fits naturally alongside it.
+🟢 Polish — Makes the Product Feel Premium
+9. Smooth Page Transitions in Preview
 
-🟢 Polish & Delight (UX Quality)
-9. Page Reorder Confirmation / Undo
+The preview page switches between pages with a fade. Adding a proper page transition — like a slide or a cross-fade with the page name briefly shown — would make the preview feel like a real product demo rather than a prototype. When users share previews with clients, this is the first impression.
 
-Users can drag pages to reorder them in the sidebar, but if they accidentally drop a page in the wrong position, there's no undo for that specific action. The undo/redo system tracks page content changes but not order changes. Adding order changes to the history stack would make the reorder feature feel safe to use.
+10. AI-Powered Page Naming
 
-10. Canvas "Fit to Screen" / "Reset View" Button
+Right now pages are named "Page 1", "Page 2", etc. When a page is generated, the AI already knows what it contains. Auto-naming pages based on their content ("Hero Section", "Pricing", "Contact") would make the sidebar much more useful, especially for projects with 5+ pages.
 
-The canvas has zoom in/out controls but no "fit all pages to screen" or "reset to default zoom" button. When a user has 5+ pages and has panned far away, there's no quick way to get back to a sensible view. A single button in the canvas controls that resets to the initial scale (26%) and position would be very useful. This is a one-line addition to the canvas controls.
+11. Drag to Reorder Pages on Canvas
 
-11. Page Preview on Hover in Sidebar
+Pages are laid out horizontally on the canvas. Users can reorder them in the sidebar, but they can't drag them on the canvas itself. This is a minor UX gap but power users who work primarily on the canvas would appreciate it.
 
-The page sidebar shows page names and numbers but no visual preview. Adding a hover tooltip that shows a small thumbnail (using the same CSS-based ProjectThumbnail approach you just built) would let users quickly identify pages without clicking through them. This is especially useful for projects with 5+ pages where names like "Home", "About", "Contact" don't tell you much about the visual state.
+12. Export to React / Tailwind Components
 
-12. Export to Figma / Copy CSS Variables
-
-Power users — especially designers — want to take their generated designs into Figma or their own codebase. Adding a "Copy CSS variables" button that copies the rootStyles block to clipboard, and a "Copy HTML" button that copies the raw HTML, would make Zephio a better tool for professional workflows. These are zero-backend features that live entirely in the client.
-
-13. Onboarding Checklist for New Users
-
-New users land on the dashboard and see an empty state with example prompts. But there's no guided path that says "here's what to do next." A simple checklist — "Create your first project ✓", "Generate your first page ✓", "Export your design", "Share a preview link" — with completion tracking in localStorage would give new users a sense of progress and guide them toward the key value moments. Each completed step is a micro-win that builds habit.
-
-14. "What's New" / Changelog Notification
-
-When you ship new features (like keyboard shortcuts, version history, etc.), users who are already signed up have no way to know. A small notification dot on a "What's new" button in the dashboard header that shows a changelog modal would keep existing users engaged and aware of improvements. This is also a retention tool — users who know the product is actively improving are less likely to churn.
-
-📊 Analytics & Business Intelligence
-15. Admin Dashboard (Internal)
-
-You have PostHog for user behavior, but no internal view of business metrics. A simple internal page (protected by an admin check) showing total users, active users this week, generations per day, free vs pro conversion rate, and top prompts would let you make data-driven decisions. This doesn't need to be fancy — even a simple /admin page with a few numbers would be valuable.
+Right now export is HTML. A "Copy as React component" button that wraps the HTML in a functional React component with Tailwind classes would make Zephio useful as a starting point for actual development — not just design. This is a zero-backend feature (pure string transformation) and would appeal strongly to developer users.
 
 Priority Order
-Week	Focus
-Now	Stripe payments — this is survival, not polish
-Week 1	Forgot password + Watermark on free exports
-Week 2	Duplicate page + Add new page button + Fit to screen
-Week 3	Project folders + Prompt history + Onboarding checklist
-Week 4	Page preview on hover + Export CSS variables + What's new
-Later	Admin dashboard + Canvas undo for reorder
+Priority	Feature	Why
+1	Responsive preview toggle	Every designer needs this, zero backend
+2	AI surgical edits ("edit this section")	Core product improvement
+3	Export to React component	Opens developer market
+4	AI-powered page naming	Small effort, big polish
+5	What's New changelog	Retention, reminds users of value
+6	User-saved templates	Habit building, stickiness
+7	Page comments for sharing	Client workflow, Team plan value
+8	Project activity log	Professional feel
+9	Multi-language generation	Market expansion
+10	Custom preview domains	Agency/Pro differentiation
 The One Thing
-If you only do one thing from this list, do Stripe. Everything else is making a better product. Stripe is making a business. You have users, you have a pricing page, you have an upgrade modal — you're one integration away from revenue. Every day without it is money left on the table.
+If I had to pick one: Responsive preview toggle. It's a 2-hour implementation, zero backend, and every single user who builds a landing page will use it immediately. It's also the most common complaint about AI design tools — "looks great on desktop but I can't see mobile". Shipping this would generate genuine positive feedback fast.

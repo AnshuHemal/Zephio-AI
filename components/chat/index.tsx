@@ -257,7 +257,7 @@ const ChatInterface = ({
 
   const { selectedPageId, setSelectedPageId } = useCanvas()
 
-  // ── Undo / Redo keyboard shortcuts ──────────────────────────────────────
+  // ── Undo / Redo — handled via KeyboardShortcutsProvider below ──────────
   const handleUndo = useCallback(() => {
     const prev = undo(pages);
     if (prev) setPages(prev);
@@ -269,18 +269,6 @@ const ChatInterface = ({
     if (next) setPages(next);
     else toast("Nothing to redo");
   }, [redo, pages]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const isMac = navigator.platform.toUpperCase().includes("MAC");
-      const mod = isMac ? e.metaKey : e.ctrlKey;
-      if (!mod) return;
-      if (e.key === "z" && !e.shiftKey) { e.preventDefault(); handleUndo(); }
-      if ((e.key === "z" && e.shiftKey) || e.key === "y") { e.preventDefault(); handleRedo(); }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [handleUndo, handleRedo]);
 
   const isLoading = status === "submitted" || status === "streaming"
 
@@ -380,14 +368,16 @@ const ChatInterface = ({
 
   if (!isProjectPage && !hasStarted) {
     return (
-      <NewProjectChat
-        input={input}
-        setInput={setInput}
-        isLoading={isLoading}
-        status={status}
-        onStop={stop}
-        onSubmit={onSubmit}
-      />
+      <KeyboardShortcutsProvider onUpgradeClick={() => setShowUpgradeModal(true)}>
+        <NewProjectChat
+          input={input}
+          setInput={setInput}
+          isLoading={isLoading}
+          status={status}
+          onStop={stop}
+          onSubmit={onSubmit}
+        />
+      </KeyboardShortcutsProvider>
     )
   }
 
@@ -396,7 +386,11 @@ const ChatInterface = ({
 
 
   return (
-    <KeyboardShortcutsProvider onUpgradeClick={() => setShowUpgradeModal(true)}>
+    <KeyboardShortcutsProvider
+      onUpgradeClick={() => setShowUpgradeModal(true)}
+      onUndo={handleUndo}
+      onRedo={handleRedo}
+    >
       <div className="flex h-screen w-full overflow-hidden">
         {/* Upgrade modal */}
         <UpgradeModal

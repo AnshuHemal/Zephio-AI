@@ -31,9 +31,11 @@ type Props = {
     pageCount: number;
   }>;
   onUpgradeClick?: () => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
 };
 
-export default function KeyboardShortcutsProvider({ children, projects, onUpgradeClick }: Props) {
+export default function KeyboardShortcutsProvider({ children, projects, onUpgradeClick, onUndo, onRedo }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -77,14 +79,10 @@ export default function KeyboardShortcutsProvider({ children, projects, onUpgrad
       key: "k",
       metaKey: true,
       handler: (e) => {
-        // Don't open if we're in an input/textarea (unless it's the chat input)
         const target = e.target as HTMLElement;
         const isInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA";
         const isChatInput = target.closest('[data-slot="prompt-input"]');
-        
-        if (!isInput || isChatInput) {
-          setCommandPaletteOpen(true);
-        }
+        if (!isInput || isChatInput) setCommandPaletteOpen(true);
       },
     },
     // Cmd+N - New project
@@ -95,33 +93,52 @@ export default function KeyboardShortcutsProvider({ children, projects, onUpgrad
         router.push("/new");
       },
     },
+    // Cmd+Z - Undo
+    {
+      key: "z",
+      metaKey: true,
+      shiftKey: false,
+      handler: () => {
+        onUndo?.();
+      },
+    },
+    // Cmd+Shift+Z - Redo
+    {
+      key: "z",
+      metaKey: true,
+      shiftKey: true,
+      handler: () => {
+        onRedo?.();
+      },
+    },
+    // Ctrl+Y - Redo (Windows alternative)
+    {
+      key: "y",
+      metaKey: true,
+      handler: () => {
+        onRedo?.();
+      },
+    },
     // Escape - Close modals / deselect
     {
       key: "Escape",
       handler: (e) => {
-        // If command palette is open, close it first
         if (commandPaletteOpen) {
           setCommandPaletteOpen(false);
           return;
         }
-
-        // Otherwise, call registered escape handlers (most recent first)
         const handlers = Array.from(escapeHandlers);
-        if (handlers.length > 0) {
-          handlers[handlers.length - 1]();
-        }
+        if (handlers.length > 0) handlers[handlers.length - 1]();
       },
-      preventDefault: false, // Let other components handle escape too
+      preventDefault: false,
     },
-    // Cmd+Enter - Submit (handled by registered handlers)
+    // Cmd+Enter - Submit
     {
       key: "Enter",
       metaKey: true,
       handler: () => {
         const handlers = Array.from(submitHandlers);
-        if (handlers.length > 0) {
-          handlers[handlers.length - 1]();
-        }
+        if (handlers.length > 0) handlers[handlers.length - 1]();
       },
     },
   ]);

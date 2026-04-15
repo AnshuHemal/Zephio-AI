@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { Code2, PaintbrushIcon, Trash2Icon, Download, RefreshCw, Pencil, Braces, Check } from 'lucide-react';
+import { Code2, PaintbrushIcon, Trash2Icon, Download, RefreshCw, Pencil, Braces, Check, Monitor, Tablet, Smartphone } from 'lucide-react';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/ui/spinner';
 import { PageType } from '@/types/project';
@@ -15,6 +15,15 @@ import { downloadPage } from '@/lib/export';
 import FeedbackButtons from '@/components/chat/feedback-buttons';
 import { renamePageAction } from '@/app/action/action';
 import { motion, AnimatePresence } from 'motion/react';
+
+// ── Viewport presets ──────────────────────────────────────────────────────────
+export type ViewportMode = "desktop" | "tablet" | "mobile";
+
+const VIEWPORT_PRESETS: Record<ViewportMode, { width: number; label: string; icon: React.ReactNode }> = {
+  desktop: { width: 1440, label: "Desktop (1440px)", icon: <Monitor className="size-3.5" /> },
+  tablet:  { width: 768,  label: "Tablet (768px)",   icon: <Tablet  className="size-3.5" /> },
+  mobile:  { width: 375,  label: "Mobile (375px)",   icon: <Smartphone className="size-3.5" /> },
+};
 
 type PropsType = {
   page: PageType
@@ -53,6 +62,7 @@ const PageFrame = ({
   const renameInputRef = useRef<HTMLInputElement>(null);
   const [copiedHtml, setCopiedHtml] = useState(false);
   const [copiedCss, setCopiedCss] = useState(false);
+  const [viewportMode, setViewportMode] = useState<ViewportMode>("desktop");
 
   // Track whether the iframe has ever been rendered — once rendered we keep
   // it alive (just hidden) so it doesn't re-parse on every pan back
@@ -154,9 +164,9 @@ const PageFrame = ({
   };
 
   // ── Virtualized content ────────────────────────────────────────────────────
-  // Render the real iframe only when visible (or once it has been visible).
-  // When off-screen we show a lightweight static placeholder that preserves
-  // the exact frame dimensions so layout never shifts.
+  const viewportWidth = VIEWPORT_PRESETS[viewportMode].width;
+  const isConstrained = viewportMode !== "desktop";
+
   const renderContent = () => {
     if (page.isLoading) {
       return (
@@ -170,52 +180,73 @@ const PageFrame = ({
       );
     }
 
-    return (
+    const iframeEl = hasBeenVisible ? (
+      <iframe
+        ref={iframeRef}
+        srcDoc={fullHtml}
+        title={page.name}
+        sandbox="allow-scripts"
+        style={{
+          // In constrained mode the iframe renders at the preset width
+          // but is displayed inside a scrollable container
+          width: isConstrained ? viewportWidth : "100%",
+          height: `${size.height}px`,
+          border: "none",
+          display: "block",
+          pointerEvents: "none",
+          visibility: isVisible ? "visible" : "hidden",
+          position: isVisible ? "relative" : "absolute",
+          top: 0,
+          left: 0,
+        }}
+      />
+    ) : null;
+
+    const placeholder = (
+      <PagePlaceholder
+        width={isConstrained ? viewportWidth : size.width}
+        height={size.height}
+        name={page.name}
+        rootStyles={page.rootStyles}
+      />
+    );
+
+    const content = (
       <>
-        {/* ── Live iframe — mounted once visible, kept alive after ── */}
-        {hasBeenVisible && (
-          <iframe
-            ref={iframeRef}
-            srcDoc={fullHtml}
-            title={page.name}
-            sandbox="allow-scripts"
-            style={{
-              width: "100%",
-              height: `${size.height}px`,
-              border: "none",
-              display: "block",
-              pointerEvents: "none",
-              // Hide (not unmount) when off-screen to save GPU compositing
-              // while keeping the iframe alive so it doesn't reload on pan-back
-              visibility: isVisible ? "visible" : "hidden",
-              position: isVisible ? "relative" : "absolute",
-              top: 0,
-              left: 0,
-            }}
-          />
-        )}
-
-        {/* ── Off-screen placeholder — shown when iframe is hidden ── */}
-        {!isVisible && (
-          <PagePlaceholder
-            width={size.width}
-            height={size.height}
-            name={page.name}
-            rootStyles={page.rootStyles}
-          />
-        )}
-
-        {/* ── First-load placeholder — before iframe has ever rendered ── */}
-        {!hasBeenVisible && (
-          <PagePlaceholder
-            width={size.width}
-            height={size.height}
-            name={page.name}
-            rootStyles={page.rootStyles}
-          />
-        )}
+        {iframeEl}
+        {!isVisible && placeholder}
+        {!hasBeenVisible && placeholder}
       </>
     );
+
+    // In constrained mode: center the narrower iframe inside the full frame width
+    if (isConstrained) {
+      return (
+        <div
+          className="w-full overflow-x-auto"
+          style={{ height: size.height }}
+        >
+          <motion.div
+            key={viewportMode}
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+            className="mx-auto overflow-hidden"
+            style={{
+              width: viewportWidth,
+              height: size.height,
+              // Subtle device frame shadow
+              boxShadow: "0 0 0 1px rgba(0,0,0,0.08), 0 4px 24px rgba(0,0,0,0.12)",
+              borderRadius: viewportMode === "mobile" ? 16 : 8,
+            }}
+          >
+            {content}
+          </motion.div>
+        </div>
+      );
+    }
+
+    return content;
   };
 
   return (
@@ -342,6 +373,26 @@ const PageFrame = ({
             )}
 
             <FeedbackButtons pageId={page.id} scale={1} />
+            <Separator orientation="vertical" className="h-4" />
+
+            {/* ── Viewport toggle ── */}
+            <div className="flex items-center rounded-md border border-border bg-muted/40 p-0.5 gap-0.5">
+              {(Object.entries(VIEWPORT_PRESETS) as [ViewportMode, typeof VIEWPORT_PRESETS[ViewportMode]][]).map(([mode, preset]) => (
+                <button
+                  key={mode}
+                  title={preset.label}
+                  onClick={(e) => { e.stopPropagation(); setViewportMode(mode); }}
+                  className={cn(
+                    "flex h-5 w-5 items-center justify-center rounded transition-all duration-150",
+                    viewportMode === mode
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {preset.icon}
+                </button>
+              ))}
+            </div>
             <Separator orientation="vertical" className="h-4" />
 
             <Popover open={showColorScheme} onOpenChange={setShowColorScheme}>
