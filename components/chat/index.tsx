@@ -304,11 +304,15 @@ const ChatInterface = ({
       {
         body: {
           ...options,
-          slugId
+          slugId,
+          // Include section HTML context so the API can do surgical edits
+          ...(sectionContext ? { sectionHtml: sectionContext.html } : {}),
         }
       }
     )
 
+    // Clear section context after submit
+    setSectionContext(null);
     // Save to prompt history after successful send
     addToPromptHistory(message.text);
     setInput("")
@@ -365,6 +369,27 @@ const ChatInterface = ({
     pushSnapshot(pagesRef.current);
     setPages(reordered);
   }, [pushSnapshot]); // stable — pagesRef.current always has latest value
+
+  // Section context — set when user picks a section via the crosshair tool
+  const [sectionContext, setSectionContext] = useState<{
+    pageId: string;
+    label: string;
+    html: string;
+  } | null>(null);
+
+  const handleSectionPicked = useCallback((pageId: string, sectionLabel: string, sectionHtml: string) => {
+    setSectionContext({ pageId, label: sectionLabel, html: sectionHtml });
+    setSelectedPageId(pageId);
+    // Pre-fill the input with a helpful prompt
+    setInput(`Edit the "${sectionLabel}" section: `);
+    setTimeout(() => {
+      const textarea = document.querySelector<HTMLTextAreaElement>("textarea");
+      if (!textarea) return;
+      textarea.focus();
+      const len = textarea.value.length;
+      textarea.setSelectionRange(len, len);
+    }, 50);
+  }, [setSelectedPageId]);
 
   if (!isProjectPage && !hasStarted) {
     return (
@@ -439,6 +464,8 @@ const ChatInterface = ({
             isLoading={isLoading}
             isProjectLoading={isProjectLoading}
             selectedPage={selectedPage}
+            sectionContext={sectionContext}
+            onClearSectionContext={() => setSectionContext(null)}
             status={status}
             error={error}
             onStop={stop}
@@ -461,6 +488,7 @@ const ChatInterface = ({
             onRenamePage={handleRenamePage}
             onReorderPages={handleReorderPages}
             onGeneratePage={handleGeneratePage}
+            onSectionPicked={handleSectionPicked}
             isPro={isPro}
           />
         </div>

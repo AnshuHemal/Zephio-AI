@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { Code2, PaintbrushIcon, Trash2Icon, Download, RefreshCw, Pencil, Braces, Check, Monitor, Tablet, Smartphone } from 'lucide-react';
+import { Code2, PaintbrushIcon, Trash2Icon, Download, RefreshCw, Pencil, Braces, Check, Monitor, Tablet, Smartphone, Crosshair } from 'lucide-react';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/ui/spinner';
 import { PageType } from '@/types/project';
@@ -37,6 +37,7 @@ type PropsType = {
   onDeletePage: (pageId: string) => void
   onRegeneratePage?: (pageId: string) => void
   onRenamePage?: (pageId: string, newName: string) => void
+  onSectionPicked?: (pageId: string, sectionLabel: string, sectionHtml: string) => void
 }
 
 const PageFrame = ({
@@ -51,6 +52,7 @@ const PageFrame = ({
   onDeletePage,
   onRegeneratePage,
   onRenamePage,
+  onSectionPicked,
 }: PropsType) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -63,6 +65,7 @@ const PageFrame = ({
   const [copiedHtml, setCopiedHtml] = useState(false);
   const [copiedCss, setCopiedCss] = useState(false);
   const [viewportMode, setViewportMode] = useState<ViewportMode>("desktop");
+  const [pickingSection, setPickingSection] = useState(false);
 
   // Track whether the iframe has ever been rendered — once rendered we keep
   // it alive (just hidden) so it doesn't re-parse on every pan back
@@ -87,10 +90,29 @@ const PageFrame = ({
       if (event.data.type === "FRAME_HEIGHT" && event.data.pageId === page.id) {
         setSize(prev => ({ ...prev, height: event.data.height }));
       }
+      // Section picker result
+      if (event.data.type === "SECTION_PICKED" && pickingSection) {
+        setPickingSection(false);
+        // Re-disable pointer events on iframe
+        if (iframeRef.current) iframeRef.current.style.pointerEvents = "none";
+        onSectionPicked?.(page.id, event.data.sectionLabel, event.data.sectionHtml);
+      }
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [page.id]);
+  }, [page.id, pickingSection, onSectionPicked]);
+
+  // Activate / deactivate section picker in the iframe
+  useEffect(() => {
+    if (!iframeRef.current?.contentWindow) return;
+    if (pickingSection) {
+      iframeRef.current.style.pointerEvents = "auto";
+      iframeRef.current.contentWindow.postMessage({ type: "SECTION_PICKER_ACTIVATE" }, "*");
+    } else {
+      iframeRef.current.style.pointerEvents = "none";
+      iframeRef.current.contentWindow?.postMessage({ type: "SECTION_PICKER_DEACTIVATE" }, "*");
+    }
+  }, [pickingSection]);
 
   const colorTokens = useMemo(() => {
     if (!page.rootStyles) return [];
@@ -358,6 +380,21 @@ const PageFrame = ({
 
             {onRegeneratePage && (
               <>
+                {/* Pick section to edit */}
+                <Button
+                  size="sm"
+                  variant={pickingSection ? "default" : "outline"}
+                  className={cn(
+                    "h-6 px-2 text-[11px] gap-1 font-medium cursor-pointer transition-all",
+                    pickingSection && "animate-pulse"
+                  )}
+                  onClick={(e) => { e.stopPropagation(); setPickingSection(v => !v); }}
+                  title={pickingSection ? "Click a section on the page to select it" : "Pick a section to edit"}
+                >
+                  <Crosshair className="size-3" />
+                  {pickingSection ? "Picking…" : "Edit section"}
+                </Button>
+
                 <Button
                   size="sm"
                   variant="default"

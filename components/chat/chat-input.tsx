@@ -52,6 +52,8 @@ type ChatInputProps = {
   isLoading: boolean;
   status: ChatStatus;
   selectedPage?: PageType;
+  sectionContext?: { pageId: string; label: string; html: string } | null;
+  onClearSectionContext?: () => void;
   setInput: (input: string) => void;
   onStop: () => void;
   onSubmit: (message: PromptInputMessage, options?: any) => void;
@@ -62,6 +64,8 @@ const ChatInput = ({
   isLoading,
   status,
   selectedPage,
+  sectionContext,
+  onClearSectionContext,
   setInput,
   onStop,
   onSubmit,
@@ -184,6 +188,23 @@ const ChatInput = ({
               {selectedPage.name} Page
               <button onClick={() => setSelectedPageId(null)}>
                 <XIcon className="size-3.5" />
+              </button>
+            </Badge>
+          </div>
+        )}
+        {sectionContext && (
+          <div className="px-2 pt-2 w-full">
+            <Badge
+              variant="outline"
+              className="text-xs gap-1 border-primary/30 bg-primary/5 text-primary"
+            >
+              <span className="size-1.5 rounded-full bg-primary inline-block" />
+              Section: {sectionContext.label}
+              <button
+                onClick={() => { onClearSectionContext?.(); setInput(""); }}
+                className="ml-0.5 hover:text-destructive transition-colors"
+              >
+                <XIcon className="size-3" />
               </button>
             </Badge>
           </div>

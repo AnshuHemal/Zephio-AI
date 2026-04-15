@@ -361,6 +361,7 @@ async function runRegenerateWorker({
   selectedPage,
   latestUserMessage,
   analysis,
+  sectionHtml,
   checkAbort,
 }: any) {
   if (!selectedPage) {
@@ -415,7 +416,7 @@ async function runRegenerateWorker({
                 EDITING: "${selectedPage.name}"
                 USER REQUEST: "${latestUserMessage}"
                 CHANGE ONLY: ${analysis.pages[0].visualDescription}
-                Current HTML: ${selectedPage.htmlContent}
+                ${sectionHtml ? `TARGET SECTION (edit ONLY this element, keep everything else identical):\n${sectionHtml}\n` : ""}Current HTML: ${selectedPage.htmlContent}
                 Return the full page HTML with only the requested change. Start with <div.`.trim(),
       },
     ],
@@ -532,11 +533,12 @@ Write 1-2 sentences in first person. Natural, confident. No questions. No "let m
 export async function POST(request: NextRequest) {
   const { signal } = request;
   try {
-    const { messages, slugId, selectedPageId, stylePreset } = (await request.json()) as {
+    const { messages, slugId, selectedPageId, stylePreset, sectionHtml } = (await request.json()) as {
       messages: UIMessage[];
       slugId: string;
       selectedPageId: string;
       stylePreset?: string | null;
+      sectionHtml?: string | null;
     };
 
     const { user, insforge } = await getAuthServer();
@@ -827,7 +829,7 @@ export async function POST(request: NextRequest) {
             ? `EXISTING PAGES (do NOT recreate):\n${existingPages!.map((p: any) => `- ${p.name}\n${p.rootStyles}`).join("\n")}\n\n`
             : ""
         }
-        ${stylePreset ? `${stylePreset}\n\n` : ""}USER REQUEST: "${latestUserMessage}"OUTPUT RAW JSON ONLY.`.trim(),
+        ${stylePreset ? `${stylePreset}\n\n` : ""}${sectionHtml ? `SECTION TO EDIT (the user clicked this specific element — apply changes ONLY to this section, preserve everything else):\n${sectionHtml}\n\n` : ""}USER REQUEST: "${latestUserMessage}"OUTPUT RAW JSON ONLY.`.trim(),
                     },
                   ],
                 },
@@ -862,6 +864,7 @@ export async function POST(request: NextRequest) {
                 selectedPage,
                 latestUserMessage,
                 analysis,
+                sectionHtml: sectionHtml ?? null,
                 checkAbort,
               });
               // Increment usage after successful regeneration

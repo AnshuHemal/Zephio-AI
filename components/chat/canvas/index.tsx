@@ -48,6 +48,7 @@ type PropsType = {
   onRenamePage?: (pageId: string, newName: string) => void;
   onGeneratePage?: () => void;
   onReorderPages?: (reordered: PageType[]) => void;
+  onSectionPicked?: (pageId: string, sectionLabel: string, sectionHtml: string) => void;
   isPro?: boolean;
 };
 
@@ -65,6 +66,7 @@ const Canvas = ({
   onRenamePage,
   onGeneratePage,
   onReorderPages,
+  onSectionPicked,
   isPro = false,
 }: PropsType) => {
   const queryClient = useQueryClient();
@@ -388,6 +390,7 @@ const Canvas = ({
                         onDeletePage={handleDelete}
                         onRegeneratePage={onRegeneratePage}
                         onRenamePage={onRenamePage}
+                        onSectionPicked={onSectionPicked}
                       />
                     );
                   })}

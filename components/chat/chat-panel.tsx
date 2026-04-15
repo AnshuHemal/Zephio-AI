@@ -40,6 +40,8 @@ type PropsType = {
   onSubmit: (message: PromptInputMessage, options?: any) => void;
   status: ChatStatus;
   selectedPage?: PageType;
+  sectionContext?: { pageId: string; label: string; html: string } | null;
+  onClearSectionContext?: () => void;
 };
 
 const ChatPanel = ({
@@ -54,6 +56,8 @@ const ChatPanel = ({
   error,
   isProjectLoading,
   selectedPage,
+  sectionContext,
+  onClearSectionContext,
 }: PropsType) => {
   return (
     <div className="relative flex flex-col flex-1 overflow-hidden">
@@ -146,6 +150,8 @@ const ChatPanel = ({
           isLoading={isLoading}
           status={status}
           selectedPage={selectedPage}
+          sectionContext={sectionContext}
+          onClearSectionContext={onClearSectionContext}
           setInput={setInput}
           onStop={onStop}
           onSubmit={onSubmit}

@@ -1,4 +1,5 @@
 import { BASE_VARIABLES, FONT_VARIABLES } from "./prompt";
+import { SECTION_PICKER_SCRIPT } from "./section-picker";
 
 export function getHTMLWrapper(
   htmlContent: string,
@@ -63,6 +64,9 @@ export function getHTMLWrapper(
       setTimeout(send,500);
     })();
   </script>
+
+  <!-- Section picker — activated by parent via postMessage -->
+  <script>${SECTION_PICKER_SCRIPT}</script>
 </body>
 </html>`;
 }
