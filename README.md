@@ -231,3 +231,41 @@ CREATE INDEX IF NOT EXISTS idx_page_comments_page_id
 3. Client clicks anywhere on the page to drop a pin and type their feedback
 4. Owner opens the same link, sees all pins, can **Resolve** or **Delete** each one
 5. The **All comments** panel shows open vs resolved comments grouped by page
+
+## Project Activity Log — Required DB Migration
+
+Run this in the Insforge SQL editor to enable the activity log:
+
+```sql
+CREATE TABLE IF NOT EXISTS project_activity (
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  "projectId" UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  "eventType" TEXT        NOT NULL,
+  label       TEXT        NOT NULL,
+  meta        JSONB,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Fast lookups by project, newest first
+CREATE INDEX IF NOT EXISTS idx_project_activity_project_id
+  ON project_activity ("projectId", "createdAt" DESC);
+```
+
+### Activity API Routes
+- `GET /api/activity/[slugId]` — owner only, returns last 100 events newest-first
+
+### Events logged automatically
+| Event | Trigger |
+|---|---|
+| `page_generated` | AI generates a new page |
+| `page_regenerated` | AI regenerates an existing page |
+| `page_renamed` | User renames a page |
+| `page_deleted` | User deletes a page |
+| `page_duplicated` | User duplicates a page |
+| `page_added` | User adds a blank page |
+| `page_restored` | User restores a page version |
+| `project_exported` | User exports as ZIP/HTML |
+| `share_link_copied` | User copies the preview link |
+
+### How to access
+Click the **Activity** (clock) button in the canvas toolbar (top-right, next to Share) to open the slide-in drawer.

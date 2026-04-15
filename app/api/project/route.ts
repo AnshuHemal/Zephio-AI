@@ -5,6 +5,7 @@ import {
   generatePageNameFromHtml,
   savePageVersionAction,
 } from "@/app/action/action";
+import { logActivityAction } from "@/app/action/activity-actions";
 import { getAuthServer } from "@/lib/insforge-server";
 import {
   createUIMessageStream,
@@ -243,6 +244,15 @@ ${page.rootStyles}
     }).catch(() => {});
     // ────────────────────────────────────────────────────────────────────
 
+    // ── Log activity (fire-and-forget) ───────────────────────────────────
+    logActivityAction(
+      projectId,
+      "page_generated",
+      `"${page.name}" generated`,
+      { pageId: savedPage.id, pageName: page.name }
+    ).catch(() => {});
+    // ────────────────────────────────────────────────────────────────────
+
     generationPages.push({
       name: page.name,
       htmlContent: htmlContent,
@@ -478,6 +488,15 @@ async function runRegenerateWorker({
       }
     }).catch(() => {});
   }
+  // ────────────────────────────────────────────────────────────────────
+
+  // ── Log activity (fire-and-forget) ───────────────────────────────────
+  logActivityAction(
+    projectId,
+    "page_regenerated",
+    `"${updatedPage.name}" regenerated`,
+    { pageId: updatedPage.id, pageName: updatedPage.name }
+  ).catch(() => {});
   // ────────────────────────────────────────────────────────────────────
 
   emit(

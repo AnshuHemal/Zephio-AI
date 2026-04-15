@@ -116,10 +116,22 @@ export const deletePageAction = async (slugId: string, pageId: string) => {
       .single();
     if (!project) return { error: "Project not found" }
 
+    // Fetch page name before deleting for the activity log
+    const { data: page } = await insforge.database.from("pages")
+      .select("name")
+      .eq("id", pageId)
+      .single();
+
     await insforge.database.from("pages")
       .delete()
       .eq("projectId", project.id)
       .eq("id", pageId)
+
+    // Log activity (fire-and-forget)
+    if (page) {
+      const { logActivityAction } = await import("./activity-actions");
+      logActivityAction(project.id, "page_deleted", `"${page.name}" deleted`, { pageId }).catch(() => {});
+    }
 
     return { success: true }
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -137,12 +149,31 @@ export const renamePageAction = async (pageId: string, name: string) => {
     if (!trimmed) return { error: "Name cannot be empty" };
     if (trimmed.length > 60) return { error: "Name too long (max 60 characters)" };
 
+    // Fetch old name for the activity log
+    const { data: oldPage } = await insforge.database
+      .from("pages")
+      .select("name, projectId")
+      .eq("id", pageId)
+      .single();
+
     const { error } = await insforge.database
       .from("pages")
       .update({ name: trimmed, updatedAt: new Date().toISOString() })
       .eq("id", pageId);
 
     if (error) return { error: "Failed to rename page" };
+
+    // Log activity (fire-and-forget)
+    if (oldPage?.projectId) {
+      const { logActivityAction } = await import("./activity-actions");
+      logActivityAction(
+        oldPage.projectId,
+        "page_renamed",
+        `"${oldPage.name}" renamed to "${trimmed}"`,
+        { pageId, oldName: oldPage.name, newName: trimmed }
+      ).catch(() => {});
+    }
+
     return { success: true, name: trimmed };
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } catch (error) {
@@ -192,6 +223,15 @@ export const duplicatePageAction = async (pageId: string) => {
       .single();
 
     if (insertError || !newPage) return { error: "Failed to duplicate page" };
+
+    // Log activity (fire-and-forget)
+    const { logActivityAction } = await import("./activity-actions");
+    logActivityAction(
+      source.projectId,
+      "page_duplicated",
+      `"${source.name}" duplicated`,
+      { sourcePageId: pageId, newPageId: newPage.id, pageName: source.name }
+    ).catch(() => {});
 
     return {
       success: true,
@@ -243,6 +283,15 @@ export const addBlankPageAction = async (slugId: string, name: string) => {
       .single();
 
     if (insertError || !newPage) return { error: "Failed to add page" };
+
+    // Log activity (fire-and-forget)
+    const { logActivityAction } = await import("./activity-actions");
+    logActivityAction(
+      project.id,
+      "page_added",
+      `"${trimmed}" added as blank page`,
+      { pageId: newPage.id, pageName: trimmed }
+    ).catch(() => {});
 
     return {
       success: true,
@@ -390,6 +439,22 @@ export async function restorePageVersionAction(
       .single();
 
     if (updateError || !updatedPage) return { error: "Failed to restore version" };
+
+    // Log activity (fire-and-forget)
+    const { data: pageProject } = await insforge.database
+      .from("pages")
+      .select("projectId")
+      .eq("id", pageId)
+      .single();
+    if (pageProject?.projectId) {
+      const { logActivityAction } = await import("./activity-actions");
+      logActivityAction(
+        pageProject.projectId,
+        "page_restored",
+        `"${updatedPage.name}" restored to earlier version`,
+        { pageId, versionId }
+      ).catch(() => {});
+    }
 
     return { page: updatedPage };
   } catch {

@@ -10,6 +10,7 @@ import { useCanvas } from "@/hooks/use-canvas";
 import { useCanvasViewport } from "@/hooks/use-canvas-viewport";
 import { PageType } from "@/types/project";
 import { deletePageAction } from "@/app/action/action";
+import { logActivityBySlugAction } from "@/app/action/activity-actions";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { downloadAllPages } from "@/lib/export";
@@ -21,6 +22,7 @@ import {
   Share2,
   PanelLeftOpen,
   PanelLeftClose,
+  Activity,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -33,6 +35,7 @@ import { useKeyboardShortcutsContext } from "@/components/keyboard-shortcuts-pro
 import { getShortcutDisplay } from "@/hooks/use-keyboard-shortcuts";
 import EmptyCanvas from "./empty-canvas";
 import { completeStep } from "@/lib/onboarding-checklist";
+import ActivityDrawer from "./activity-drawer";
 
 type PropsType = {
   pages: PageType[];
@@ -76,6 +79,7 @@ const Canvas = ({
   const [deletingPageId, setDeletingPageId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
   const { selectedPageId, setSelectedPageId } = useCanvas();
   const { capture } = useAnalytics();
   const { registerEscapeHandler } = useKeyboardShortcutsContext();
@@ -148,6 +152,13 @@ const Canvas = ({
       format: pages.length === 1 ? "single_html" : "zip",
     });
     completeStep("export_design");
+    // Log activity
+    logActivityBySlugAction(
+      slugId,
+      "project_exported",
+      `Project exported as ${pages.length === 1 ? "HTML" : "ZIP"} (${pages.length} page${pages.length !== 1 ? "s" : ""})`,
+      { pageCount: pages.length }
+    ).catch(() => {});
     setIsDownloading(false);
   };
 
@@ -160,6 +171,13 @@ const Canvas = ({
       page_count: pages.length,
     });
     completeStep("share_preview");
+    // Log activity
+    logActivityBySlugAction(
+      slugId,
+      "share_link_copied",
+      "Preview link copied to clipboard",
+      { pageCount: pages.length }
+    ).catch(() => {});
   };
 
   const visiblePages = pages.filter((p) => !p.isLoading || p.htmlContent);
@@ -201,6 +219,13 @@ const Canvas = ({
 
       {/* ── Canvas area ── */}
       <div ref={canvasContainerRef} className="relative flex-1 overflow-hidden">
+        {/* Activity drawer — fixed overlay, renders above everything */}
+        <ActivityDrawer
+          slugId={slugId}
+          open={activityOpen}
+          onClose={() => setActivityOpen(false)}
+        />
+
         {/* Top toolbar */}
         <div className="absolute left-0 right-0 top-0 z-20 flex items-center justify-between px-3 py-2 pointer-events-none">
           {/* Left: sidebar toggle */}
@@ -301,6 +326,23 @@ const Canvas = ({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">Copy preview link</TooltipContent>
+            </Tooltip>
+
+            <div className="h-4 w-px bg-border mx-0.5" />
+
+            {/* Activity log */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="icon-sm"
+                  variant={activityOpen ? "secondary" : "outline"}
+                  className="rounded-lg shadow-sm bg-card"
+                  onClick={() => setActivityOpen((v) => !v)}
+                >
+                  <Activity className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Activity log</TooltipContent>
             </Tooltip>
           </div>
         </div>
